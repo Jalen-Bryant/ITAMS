@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IT Asset Management System — Sign In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Page background image (covers both columns) -->
+  <div class="bg">
+    <img src="Images/login_background.png" alt="" aria-hidden="true">
+  </div>
+
+  <main class="layout">
+    <!-- LEFT: translucent “glass” rail -->
+    <aside class="rail" aria-labelledby="signin-title">
+      <a class="back" href="#" aria-label="Go back">← Back</a>
+
+      <section class="rail-body">
+        <h1 id="signin-title" class="rail-title">Sign In</h1>
+
+        <form class="form" onsubmit="event.preventDefault(); window.location.href='dashboard.html';">
+          <label class="field">
+            <span>Username</span>
+            <input type="text" name="username" autocomplete="username"
+                   placeholder="you@company.com"
+                   title="Please provide your web-authentication details to sign in." required>
+          </label>
+
+          <label class="field">
+            <span>Password</span>
+            <input type="password" name="password" autocomplete="current-password"
+                   placeholder="Enter your password"
+                   title="Please provide your web-authentication details to sign in." required>
+          </label>
+
+          <button class="btn" type="submit" aria-label="Sign in to ITAMS">Sign In</button>
+
+           <!-- 👇 Add this Sign-Up redirect -->
+        <div class="signup-link">
+  <p>
+    Don’t have an account?
+    <button 
+      type="button" 
+      class="btn" 
+      aria-label="Sign up for ITAMS" 
+      id = "signup"
+      onclick="window.location.href='signup.html'">
+      Sign Up
+    </button>
+  </p>
+</div>
+
+      </section>
+        </form>
+      </section>
+
+      <section class="rail-footer">
+        <div class="brand-mini">
+          <div class="brand-name">IT Asset Management System</div>
+          <div class="brand-tag">Secure. Scalable. Seamless Asset Management.</div>
+        </div>
+        <nav class="social" aria-label="Social links">
+          <a href="#" aria-label="Instagram" class="ico">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm5 5a5 5 0 1 0 .001 10.001A5 5 0 0 0 12 7Zm6-1a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" fill="currentColor"/></svg>
+          </a>
+          <a href="#" aria-label="LinkedIn" class="ico">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.98 3.5A2.5 2.5 0 1 1 0 3.5a2.5 2.5 0 0 1 4.98 0ZM.5 8h4v14h-4V8Zm7.5 0h3.8v2.2h.05c.6-1.1 2-2.2 4-2.2 3.8 0 5.7 2.4 5.7 6.3V22h-4v-7.6c0-1.9-.7-3.2-2.5-3.2-1.35 0-2.2.9-2.55 1.8-.15.35-.2.85-.2 1.35V22h-4V8Z" fill="currentColor"/></svg>
+          </a>
+          <a href="#" aria-label="X" class="ico">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 2H22l-7.3 8 8.3 12h-4.7l-5.6-7.8L6 22H2.3l7.8-8.6L2 2h4.7l5.2 7.2L18.3 2Z" fill="currentColor"/></svg>
+          </a>
+        </nav>
+      </section>
+    </aside>
+
+    <!-- RIGHT: centered dark overlay with logo/title/tagline -->
+    <section class="hero">
+      <div class="overlay">
+        <img class="hero-logo" src="logo.png" alt="ITAMS logo">
+        <h2 class="hero-title">IT Asset<br>Management<br>System</h2>
+        <p class="hero-tag">Secure. Scalable. Seamless Asset Management.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom footer (matches mock) -->
+  <footer class="global-footer">
+    <div class="gf-brand">
+      <div class="gf-name">IT Asset Management System</div>
+      <div class="gf-tag">Secure. Scalable. Seamless Asset Management.</div>
+    </div>
+    <nav class="gf-links" aria-label="Footer">
+      <div>
+        <h4>Features</h4>
+        <a href="#">Core features</a>
+        <a href="#">Pro experience</a>
+        <a href="#">Integrations</a>
+      </div>
+      <div>
+        <h4>Learn more</h4>
+        <a href="#">Blog</a>
+        <a href="#">Case studies</a>
+        <a href="#">Customer stories</a>
+        <a href="#">Best practices</a>
+      </div>
+      <div>
+        <h4>Support</h4>
+        <a href="#">Contact</a>
+        <a href="#">Support</a>
+        <a href="#">Legal</a>
+      </div>
+    </nav>
+  </footer>
+  <script src="js/login.js"></script>
+
+</body>
+
+</html>

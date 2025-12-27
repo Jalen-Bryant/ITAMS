@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IT Asset Management System — Sign Up</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+  <div class="bg">
+    <img src="Images/login_background.png" alt="" aria-hidden="true">
+  </div>
+
+  <main class="layout">
+    <aside class="rail" aria-labelledby="signup-title">
+      <a class="back" href="login.html" aria-label="Go back">← Back to Login</a>
+
+      <section class="rail-body">
+        <h1 id="signup-title" class="rail-title">Create Account</h1>
+
+        <form id="signupForm" class="form" novalidate>
+          <label class="field">
+            <span>Email (Username)</span>
+            <input type="email" id="signupEmail" name="username"
+                   placeholder="you@company.com"
+                   required>
+            <small class="error-message"></small>
+          </label>
+
+          <label class="field">
+            <span>Password</span>
+            <input type="password" id="signupPassword" name="password"
+                   placeholder="Enter password"
+                   required>
+            <small class="error-message"></small>
+          </label>
+
+          <ul class="requirements">
+            <li id="reqUpper"> 1 uppercase letter</li>
+            <li id="reqLower"> 1 lowercase letter</li>
+            <li id="reqNumber"> 1 number</li>
+            <li id="reqSpecial"> 1 special character</li>
+            <li id="reqLength"> At least 8 characters</li>
+          </ul>
+
+          <button class="btn" type="submit">Sign Up</button>
+        </form>
+      </section>
+
+      <section class="rail-footer">
+        <div class="brand-mini">
+          <div class="brand-name">IT Asset Management System</div>
+          <div class="brand-tag">Secure. Scalable. Seamless Asset Management.</div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="hero">
+      <div class="overlay">
+        <img class="hero-logo" src="logo.png" alt="ITAMS logo">
+        <h2 class="hero-title">IT Asset<br>Management<br>System</h2>
+        <p class="hero-tag">Secure. Scalable. Seamless Asset Management.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom footer (matches mock) -->
+  <footer class="global-footer">
+    <div class="gf-brand">
+      <div class="gf-name">IT Asset Management System</div>
+      <div class="gf-tag">Secure. Scalable. Seamless Asset Management.</div>
+    </div>
+    <nav class="gf-links" aria-label="Footer">
+      <div>
+        <h4>Features</h4>
+        <a href="#">Core features</a>
+        <a href="#">Pro experience</a>
+        <a href="#">Integrations</a>
+      </div>
+      <div>
+        <h4>Learn more</h4>
+        <a href="#">Blog</a>
+        <a href="#">Case studies</a>
+        <a href="#">Customer stories</a>
+        <a href="#">Best practices</a>
+      </div>
+      <div>
+        <h4>Support</h4>
+        <a href="#">Contact</a>
+        <a href="#">Support</a>
+        <a href="#">Legal</a>
+      </div>
+    </nav>
+  </footer>
+
+  <script src="js/signup.js"></script>
+</body>
+</html>
