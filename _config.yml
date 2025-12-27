@@ -2,6 +2,6 @@ plugins:
   - jekyll-redirect-from
 
 ---
-title: Home
+title: login
 permalink: /
 ---
