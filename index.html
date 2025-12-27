@@ -1,14 +1,188 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=login.html">
-    <script type="text/javascript">
-        window.location.href = "login.html";
-    </script>
-    <title>Redirecting...</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IT Asset Management System — Landing</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/landing.css" />
 </head>
 <body>
-    <p>If you are not redirected automatically, follow this <a href="login.html">link to login</a>.</p>
+  <header class="site-header">
+    <div class="logo" aria-label="ITAMS">
+      <span class="logo-mark" aria-hidden="true">✺</span>
+    </div>
+    <nav class="nav" aria-label="Primary">
+      <a href="#resources">Resources</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#products">Products</a>
+      <a class="nav-cta" href="login.html">Sign In</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="products">
+      <div class="hero-content">
+        <p class="eyebrow">Secure. Scalable. Seamless Asset Management.</p>
+        <h1>IT Asset Management System</h1>
+        <p class="hero-subtitle">Secure. Scalable. Seamless Asset Management.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" type="button">Call to action</button>
+          <button class="btn btn-ghost" type="button">Secondary</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature" id="resources">
+      <div class="feature-text">
+        <h2>A really compelling headline</h2>
+        <p>Call out a feature, benefit, or value of your site, then link to a page where people can learn more about it.</p>
+        <button class="btn btn-primary" type="button">Call to action</button>
+      </div>
+      <div class="feature-media" aria-hidden="true"></div>
+    </section>
+
+    <section class="cards">
+      <article class="card">
+        <div class="card-media card-media--mint"></div>
+        <div class="card-body">
+          <h3>This outstanding object</h3>
+          <p>Call out a feature, benefit, or value of your site or product that can stand on its own.</p>
+          <a href="#" class="text-link">Call to action →</a>
+        </div>
+      </article>
+      <article class="card">
+        <div class="card-media card-media--pixel"></div>
+        <div class="card-body">
+          <h3>This astounding article</h3>
+          <p>Cards are a great way to organize content in a collection—products, case studies, services, and more.</p>
+          <a href="#" class="text-link">Call to action →</a>
+        </div>
+      </article>
+      <article class="card">
+        <div class="card-media card-media--aqua"></div>
+        <div class="card-body">
+          <h3>This brilliant bit</h3>
+          <p>Add more cards to this little stack to build out a grid of whatever size and shape you need.</p>
+          <a href="#" class="text-link">Call to action →</a>
+        </div>
+      </article>
+    </section>
+
+    <section class="quote">
+      <blockquote>
+        “A large, heavily bolded quote for emphasis and breaking up content.”
+      </blockquote>
+      <p class="quote-author">Andi Antennae, <span>Transport at Suite Nectar</span></p>
+    </section>
+
+    <section class="testimonials">
+      <div class="section-head">
+        <h2>Testimonials</h2>
+        <p>Here’s what people are saying</p>
+      </div>
+      <div class="testimonial-grid">
+        <article class="testimonial">
+          <p>In the garden of life, some things are just very sweet. This is one of them.</p>
+          <div class="testimonial-footer">
+            <span class="avatar avatar--peach">☺</span>
+            <div>
+              <strong>Andi Antennae</strong>
+              <span>Transport at Suite Nectar</span>
+            </div>
+          </div>
+        </article>
+        <article class="testimonial">
+          <p>Your expectations will fly sky high. I felt like I was soaring.</p>
+          <div class="testimonial-footer">
+            <span class="avatar avatar--lavender">☺</span>
+            <div>
+              <strong>Wanda Wingleton</strong>
+              <span>Lepidopterist at Butterflyai</span>
+            </div>
+          </div>
+        </article>
+        <article class="testimonial">
+          <p>Using this felt like it transformed me completely.</p>
+          <div class="testimonial-footer">
+            <span class="avatar avatar--mint">☺</span>
+            <div>
+              <strong>Carl Caterpillar</strong>
+              <span>Growth at Cocoon &amp; Co.</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="pricing" id="pricing">
+      <article class="plan">
+        <h3>Plan 1</h3>
+        <p class="plan-subtitle">For individuals</p>
+        <div class="price"><span class="price-amount">$2</span> / month</div>
+        <ul>
+          <li>Feature 1</li>
+          <li>Feature 2</li>
+          <li>Feature 3</li>
+        </ul>
+        <button class="btn btn-ghost" type="button">Sign up</button>
+      </article>
+      <article class="plan plan--featured">
+        <h3>Plan 2</h3>
+        <p class="plan-subtitle">For medium teams</p>
+        <div class="price"><span class="price-amount">$5</span> / month</div>
+        <ul>
+          <li>All the Plan #2 features</li>
+          <li>Feature 4</li>
+          <li>Feature 5</li>
+        </ul>
+        <button class="btn btn-primary" type="button">Sign up</button>
+      </article>
+      <article class="plan">
+        <h3>Plan 3</h3>
+        <p class="plan-subtitle">For large teams</p>
+        <div class="price"><span class="price-amount">$10</span> / month</div>
+        <ul>
+          <li>All the Plan #2 features</li>
+          <li>Feature 6</li>
+          <li>Feature 7</li>
+        </ul>
+        <button class="btn btn-ghost" type="button">Sign up</button>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-brand">
+      <h3>IT Asset Management System</h3>
+      <p>Secure. Scalable. Seamless Asset Management.</p>
+      <div class="socials" aria-label="Social links">
+        <a href="#" aria-label="Instagram">◎</a>
+        <a href="#" aria-label="LinkedIn">in</a>
+        <a href="#" aria-label="X">𝕏</a>
+      </div>
+    </div>
+    <div class="footer-links">
+      <div>
+        <h4>Features</h4>
+        <a href="#">Core features</a>
+        <a href="#">Pro experience</a>
+        <a href="#">Integrations</a>
+      </div>
+      <div>
+        <h4>Learn more</h4>
+        <a href="#">Blog</a>
+        <a href="#">Case studies</a>
+        <a href="#">Customer stories</a>
+        <a href="#">Best practices</a>
+      </div>
+      <div>
+        <h4>Support</h4>
+        <a href="#">Contact</a>
+        <a href="#">Support</a>
+        <a href="#">Legal</a>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>
