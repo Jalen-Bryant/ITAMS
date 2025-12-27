@@ -262,12 +262,11 @@ img {
 .text-link:focus-visible::after {
   transform: scaleX(1);
 }
-}
 
 .quote {
   padding: 2rem 4rem 4rem;
   border-left: 2px solid #dadada;
-  margin: 0 4rem;
+  margin: 0;
 }
 
 .quote blockquote {
