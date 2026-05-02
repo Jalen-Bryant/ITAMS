@@ -1,0 +1,31 @@
+#!/bin/sh
+set -u
+
+deploy_failed=0
+zero_rev="0000000000000000000000000000000000000000"
+
+while read oldrev newrev refname
+do
+    if [ "$refname" != "refs/heads/main" ]; then
+        echo "ITAMS deploy: $refname updated; no deployment configured for this ref."
+        continue
+    fi
+
+    if [ "$newrev" = "$zero_rev" ]; then
+        echo "ITAMS deploy: main was deleted; skipping deployment."
+        continue
+    fi
+
+    echo "ITAMS deploy: deploying main at $newrev"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:/ITAMS/Deploy/Invoke-ITAMSDeployment.ps1" -Commit "$newrev" -BareRepositoryPath "C:/Git/ITAMS.git"
+    result=$?
+
+    if [ $result -ne 0 ]; then
+        echo "ITAMS deploy: deployment failed for $newrev. Git ref was updated, but IIS remains on the previous working release."
+        deploy_failed=1
+    else
+        echo "ITAMS deploy: deployment succeeded for $newrev"
+    fi
+done
+
+exit $deploy_failed
