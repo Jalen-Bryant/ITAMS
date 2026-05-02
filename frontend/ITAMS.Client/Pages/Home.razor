@@ -1,0 +1,81 @@
+@page "/home"
+@attribute [Authorize]
+@inject AuthSessionService AuthSessionService
+
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Welcome back</p>
+        <h1>Home</h1>
+        <p class="page-intro">This workspace only surfaces modules that the current API already supports for your role.</p>
+    </div>
+</section>
+
+<section class="hero-summary">
+    <article class="summary-card summary-card-wide">
+        <p class="summary-label">Signed In As</p>
+        <h2>@(User?.DisplayName ?? "Unknown user")</h2>
+        <p>@(User?.Email ?? string.Empty)</p>
+    </article>
+    <article class="summary-card">
+        <p class="summary-label">Role</p>
+        <h2>@(User?.Role ?? "Unknown")</h2>
+        <p>Server authorization remains the source of truth.</p>
+    </article>
+    <article class="summary-card">
+        <p class="summary-label">Department</p>
+        <h2>@(User?.Department ?? "Unknown")</h2>
+        <p>Use the modules below to continue your current workflows.</p>
+    </article>
+</section>
+
+<section class="card-grid">
+    @if (AppRoles.CanReadReports(User?.Role))
+    {
+        <a class="nav-card" href="/reports">
+            <p class="summary-label">Analytics</p>
+            <h3>Reports</h3>
+            <p>Track live inventory totals, staffing distribution, and assignment or lifecycle trends from a single reporting surface.</p>
+        </a>
+    }
+    @if (AppRoles.CanReadAssets(User?.Role))
+    {
+        <a class="nav-card" href="/assets">
+            <p class="summary-label">Asset Inventory</p>
+            <h3>Assets</h3>
+            <p>Create, edit, review, and retire tracked hardware records.</p>
+        </a>
+    }
+    @if (AppRoles.CanReadAssignments(User?.Role))
+    {
+        <a class="nav-card" href="/assignments">
+            <p class="summary-label">Allocation</p>
+            <h3>Assignments</h3>
+            <p>Link assets to users with start and end dates from the live assignments API.</p>
+        </a>
+    }
+    @if (AppRoles.CanReadUsers(User?.Role))
+    {
+        <a class="nav-card" href="/users">
+            <p class="summary-label">Identity</p>
+            <h3>Users</h3>
+            <p>Review directory records, with create and edit tools reserved for admins.</p>
+        </a>
+    }
+    @if (AppRoles.CanReadHistory(User?.Role))
+    {
+        <a class="nav-card" href="/history">
+            <p class="summary-label">Traceability</p>
+            <h3>History</h3>
+            <p>Inspect audit logs and lifecycle events without needing a synthetic dashboard endpoint.</p>
+        </a>
+    }
+    <a class="nav-card" href="/account/change-password">
+        <p class="summary-label">Security</p>
+        <h3>Change Password</h3>
+        <p>Update your current password through the existing authentication API.</p>
+    </a>
+</section>
+
+@code {
+    private CurrentUserResponse? User => AuthSessionService.CurrentSession?.User;
+}

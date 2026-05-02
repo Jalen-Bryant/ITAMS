@@ -1,0 +1,138 @@
+@page "/history"
+@attribute [Authorize(Roles = "Admin,Manager,Auditor")]
+@inject HistoryApiService HistoryApiService
+
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Traceability</p>
+        <h1>History</h1>
+        <p class="page-intro">Review audit logs and lifecycle events using the current read-only history endpoints.</p>
+    </div>
+</section>
+
+<MessagePanel Messages="@_messages" CssClass="message-panel message-panel-error" />
+
+<section class="list-card">
+    <div class="segmented-control">
+        <button class="@GetTabClass("audit")" @onclick='() => SetTab("audit")'>Audit Logs</button>
+        <button class="@GetTabClass("lifecycle")" @onclick='() => SetTab("lifecycle")'>Lifecycle Events</button>
+    </div>
+
+    <div class="list-toolbar">
+        <InputText class="input-control" placeholder="Search history..." @bind-Value="_search" />
+    </div>
+
+    @if (_isLoading)
+    {
+        <p class="empty-state">Loading history...</p>
+    }
+    else if (_activeTab == "audit")
+    {
+        @if (FilteredAuditLogs.Count == 0)
+        {
+            <p class="empty-state">No audit logs matched your current filter.</p>
+        }
+        else
+        {
+            <div class="timeline-list">
+                @foreach (var auditLog in FilteredAuditLogs)
+                {
+                    <article class="timeline-card">
+                        <div class="timeline-card__header">
+                            <strong>@auditLog.Action</strong>
+                            <span>@FormatDateTime(auditLog.Timestamp)</span>
+                        </div>
+                        <p class="timeline-meta">@auditLog.EntityType @auditLog.EntityId</p>
+                        <p class="timeline-body">@($"{auditLog.Details?.Result ?? "No result"}{(string.IsNullOrWhiteSpace(auditLog.Details?.Note) ? string.Empty : $" - {auditLog.Details?.Note}")}")</p>
+                        <p class="timeline-meta">@auditLog.UserAgent</p>
+                    </article>
+                }
+            </div>
+        }
+    }
+    else if (FilteredLifecycleEvents.Count == 0)
+    {
+        <p class="empty-state">No lifecycle events matched your current filter.</p>
+    }
+    else
+    {
+        <div class="timeline-list">
+            @foreach (var lifecycleEvent in FilteredLifecycleEvents)
+            {
+                <article class="timeline-card">
+                    <div class="timeline-card__header">
+                        <strong>@lifecycleEvent.EventType</strong>
+                        <span>@FormatDateTime(lifecycleEvent.Timestamp)</span>
+                    </div>
+                    <p class="timeline-meta">Asset @lifecycleEvent.AssetId</p>
+                    <p class="timeline-body">@lifecycleEvent.Notes</p>
+                    @if (lifecycleEvent.Changes.Count > 0)
+                    {
+                        <ul class="change-list">
+                            @foreach (var change in lifecycleEvent.Changes)
+                            {
+                                <li>@change.Field: @change.OldValue -> @change.NewValue</li>
+                            }
+                        </ul>
+                    }
+                </article>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private readonly List<AuditLogResponse> _auditLogs = [];
+    private readonly List<LifecycleEventResponse> _lifecycleEvents = [];
+    private readonly List<string> _messages = [];
+    private bool _isLoading = true;
+    private string _activeTab = "audit";
+    private string _search = string.Empty;
+
+    private List<AuditLogResponse> FilteredAuditLogs =>
+        _auditLogs
+            .Where(log =>
+                string.IsNullOrWhiteSpace(_search) ||
+                $"{log.Action} {log.EntityType} {log.EntityId} {log.ActorUserId} {log.UserAgent} {log.Details?.Note} {log.Details?.Result}"
+                    .Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(log => log.Timestamp)
+            .ToList();
+
+    private List<LifecycleEventResponse> FilteredLifecycleEvents =>
+        _lifecycleEvents
+            .Where(item =>
+                string.IsNullOrWhiteSpace(_search) ||
+                $"{item.EventType} {item.AssetId} {item.Notes} {item.PerformedByUserId}"
+                    .Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.Timestamp)
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var auditTask = HistoryApiService.GetAuditLogsAsync();
+            var lifecycleTask = HistoryApiService.GetLifecycleEventsAsync();
+            await Task.WhenAll(auditTask, lifecycleTask);
+
+            _auditLogs.AddRange(auditTask.Result);
+            _lifecycleEvents.AddRange(lifecycleTask.Result);
+        }
+        catch (ApiException exception)
+        {
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string GetTabClass(string tab) =>
+        _activeTab == tab ? "segment-button is-active" : "segment-button";
+
+    private void SetTab(string tab) => _activeTab = tab;
+
+    private static string FormatDateTime(DateTime value) =>
+        value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+}

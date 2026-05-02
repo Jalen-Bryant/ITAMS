@@ -1,0 +1,206 @@
+@ITAMS.Api_HostAddress = http://localhost:5260
+@AccessToken = paste_jwt_here
+@RefreshToken = paste_refresh_token_here
+@AssetId = 65c0000000000000000007d1
+@AssignmentId = 65c000000000000000000bb9
+@AuditLogId = 65c000000000000000001f41
+@LifecycleEventId = 65c00000000000000000138d
+@UserId = 65c00000000000000000040b
+
+# Swagger UI: http://localhost:5260/swagger
+# All protected routes require Authorization: Bearer {{AccessToken}}
+
+### Login
+POST {{ITAMS.Api_HostAddress}}/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "bootstrap_api_tests",
+  "password": "BootstrapAdminPass123!"
+}
+
+### Refresh token
+POST {{ITAMS.Api_HostAddress}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{RefreshToken}}"
+}
+
+### Current user
+GET {{ITAMS.Api_HostAddress}}/auth/me
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Change password
+POST {{ITAMS.Api_HostAddress}}/auth/change-password
+Authorization: Bearer {{AccessToken}}
+Content-Type: application/json
+
+{
+  "currentPassword": "BootstrapAdminPass123!",
+  "newPassword": "BootstrapAdminPass456!"
+}
+
+### Logout
+POST {{ITAMS.Api_HostAddress}}/auth/logout
+Authorization: Bearer {{AccessToken}}
+
+### Users
+GET {{ITAMS.Api_HostAddress}}/users
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### User by id
+GET {{ITAMS.Api_HostAddress}}/users/{{UserId}}
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Create user
+POST {{ITAMS.Api_HostAddress}}/users
+Authorization: Bearer {{AccessToken}}
+Content-Type: application/json
+
+{
+  "username": "api_test_user_01",
+  "displayName": "API Test User",
+  "email": "api_test_user_01@city.example",
+  "password": "UserPassword123!",
+  "role": "Technician",
+  "department": "IT",
+  "isActive": true
+}
+
+### Update user
+PUT {{ITAMS.Api_HostAddress}}/users/{{UserId}}
+Authorization: Bearer {{AccessToken}}
+Content-Type: application/json
+
+{
+  "username": "reese_martinez35",
+  "displayName": "Reese Martinez",
+  "email": "reese_martinez35@city.example",
+  "role": "Technician",
+  "department": "HR",
+  "isActive": true
+}
+
+### Delete user
+DELETE {{ITAMS.Api_HostAddress}}/users/{{UserId}}
+Authorization: Bearer {{AccessToken}}
+
+### Assets
+GET {{ITAMS.Api_HostAddress}}/assets
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Asset by id
+GET {{ITAMS.Api_HostAddress}}/assets/{{AssetId}}
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Create asset
+POST {{ITAMS.Api_HostAddress}}/assets
+Authorization: Bearer {{AccessToken}}
+Content-Type: application/json
+
+{
+  "assetTag": "TEST-LAP-20260321-01",
+  "serialNumber": "SN-TEST-20260321-01",
+  "type": "Laptop",
+  "manufacturer": "Lenovo",
+  "model": "ThinkPad T14",
+  "status": "InStock",
+  "department": "IT",
+  "location": "API Integration Lab",
+  "purchaseDate": "2025-09-23T00:00:00Z",
+  "warrantyEndDate": "2028-09-22T00:00:00Z",
+  "endOfLifeDate": "2030-09-22T00:00:00Z",
+  "currentAssignment": null,
+  "notes": "Ready for imaging"
+}
+
+### Update asset
+PUT {{ITAMS.Api_HostAddress}}/assets/{{AssetId}}
+Authorization: Bearer {{AccessToken}}
+Content-Type: application/json
+
+{
+  "assetTag": "TEST-LAP-20260321-01",
+  "serialNumber": "SN-TEST-20260321-01",
+  "type": "Laptop",
+  "manufacturer": "Lenovo",
+  "model": "ThinkPad T14 Gen 5",
+  "status": "InRepair",
+  "department": "IT",
+  "location": "Phoenix HQ - Repair Bench",
+  "purchaseDate": "2025-09-23T00:00:00Z",
+  "warrantyEndDate": "2028-09-22T00:00:00Z",
+  "endOfLifeDate": "2030-09-22T00:00:00Z",
+  "currentAssignment": null,
+  "notes": "Sent to repair queue"
+}
+
+### Delete asset
+DELETE {{ITAMS.Api_HostAddress}}/assets/{{AssetId}}
+Authorization: Bearer {{AccessToken}}
+
+### Assignments
+GET {{ITAMS.Api_HostAddress}}/assignments
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Assignment by id
+GET {{ITAMS.Api_HostAddress}}/assignments/{{AssignmentId}}
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Create assignment
+POST {{ITAMS.Api_HostAddress}}/assignments
+Authorization: Bearer {{AccessToken}}
+Content-Type: application/json
+
+{
+  "assetId": "65c0000000000000000007e8",
+  "userId": "65c000000000000000000415",
+  "startDate": "2026-03-21T00:00:00Z",
+  "endDate": null,
+  "notes": "Smoke test assignment"
+}
+
+### Update assignment
+PUT {{ITAMS.Api_HostAddress}}/assignments/{{AssignmentId}}
+Authorization: Bearer {{AccessToken}}
+Content-Type: application/json
+
+{
+  "assetId": "65c0000000000000000007e8",
+  "userId": "65c000000000000000000415",
+  "startDate": "2026-03-21T00:00:00Z",
+  "endDate": "2026-03-28T00:00:00Z",
+  "notes": "Temporary loaner - updated"
+}
+
+### Delete assignment
+DELETE {{ITAMS.Api_HostAddress}}/assignments/{{AssignmentId}}
+Authorization: Bearer {{AccessToken}}
+
+### Audit logs are server-owned and read-only
+GET {{ITAMS.Api_HostAddress}}/audit-logs
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Audit log by id
+GET {{ITAMS.Api_HostAddress}}/audit-logs/{{AuditLogId}}
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Lifecycle events are server-owned and read-only
+GET {{ITAMS.Api_HostAddress}}/lifecycle-events
+Authorization: Bearer {{AccessToken}}
+Accept: application/json
+
+### Lifecycle event by id
+GET {{ITAMS.Api_HostAddress}}/lifecycle-events/{{LifecycleEventId}}
+Authorization: Bearer {{AccessToken}}
+Accept: application/json

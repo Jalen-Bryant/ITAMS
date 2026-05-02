@@ -1,0 +1,418 @@
+@page "/assets"
+@attribute [Authorize(Roles = "Admin,Manager,Technician,Auditor")]
+@inject AssetApiService AssetApiService
+@inject AuthSessionService AuthSessionService
+@inject IJSRuntime JSRuntime
+
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Inventory</p>
+        <h1>Assets</h1>
+        <p class="page-intro">Search the current asset inventory and manage records through the existing asset endpoints.</p>
+    </div>
+    @if (CanWrite)
+    {
+        <button class="button button-primary" @onclick="StartCreate">New Asset</button>
+    }
+</section>
+
+<MessagePanel Messages="@_messages" CssClass="@_messageClass" />
+
+<section class="workspace-grid">
+    <article class="list-card">
+        <div class="list-toolbar">
+            <InputText class="input-control" placeholder="Search assets..." @bind-Value="Search" />
+            <select class="input-control input-control-small" @bind="Sort">
+                <option value="updated-desc">Recent updates</option>
+                <option value="tag-asc">Asset tag</option>
+                <option value="purchase-desc">Newest purchase</option>
+            </select>
+        </div>
+
+        @{
+            var filteredAssets = FilteredAssets;
+            var pagedAssets = GetPagedAssets(filteredAssets);
+        }
+
+        @if (_isLoading)
+        {
+            <p class="empty-state">Loading assets...</p>
+        }
+        else if (filteredAssets.Count == 0)
+        {
+            <p class="empty-state">No assets matched your current filter.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Asset Tag</th>
+                            <th>Status</th>
+                            <th>Type</th>
+                            <th>Department</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var asset in pagedAssets)
+                        {
+                            <tr class="@GetRowClass(asset.Id)" @onclick="() => SelectAsset(asset)">
+                                <td>@asset.AssetTag</td>
+                                <td>@asset.Status</td>
+                                <td>@asset.Type</td>
+                                <td>@asset.Department</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <PaginationControls TotalItemCount="@filteredAssets.Count"
+                                CurrentPage="@_currentPage"
+                                CurrentPageChanged="SetCurrentPage"
+                                PageSize="@_pageSize"
+                                PageSizeChanged="SetPageSize" />
+        }
+    </article>
+
+    <article class="editor-card">
+        @if (!CanWrite)
+        {
+            @if (_selectedAsset is null)
+            {
+                <p class="empty-state">Select an asset to review its details.</p>
+            }
+            else
+            {
+                <div class="detail-panel">
+                    <div class="detail-panel__header">
+                        <div>
+                            <p class="summary-label">Selected Asset</p>
+                            <h2>@_selectedAsset.AssetTag</h2>
+                        </div>
+                    </div>
+                    <dl class="detail-list">
+                        <div><dt>Serial</dt><dd>@_selectedAsset.SerialNumber</dd></div>
+                        <div><dt>Type</dt><dd>@_selectedAsset.Type</dd></div>
+                        <div><dt>Status</dt><dd>@_selectedAsset.Status</dd></div>
+                        <div><dt>Manufacturer</dt><dd>@_selectedAsset.Manufacturer</dd></div>
+                        <div><dt>Model</dt><dd>@_selectedAsset.Model</dd></div>
+                        <div><dt>Department</dt><dd>@_selectedAsset.Department</dd></div>
+                        <div><dt>Location</dt><dd>@_selectedAsset.Location</dd></div>
+                        <div><dt>Purchase</dt><dd>@FormatDate(_selectedAsset.PurchaseDate)</dd></div>
+                        <div><dt>Warranty</dt><dd>@FormatDate(_selectedAsset.WarrantyEndDate)</dd></div>
+                        <div><dt>End of Life</dt><dd>@FormatDate(_selectedAsset.EndOfLifeDate)</dd></div>
+                        <div><dt>Notes</dt><dd>@(_selectedAsset.Notes ?? "None")</dd></div>
+                    </dl>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="editor-card__header">
+                <div>
+                    <p class="summary-label">@(_editor.IsExisting ? "Editing Asset" : "Create Asset")</p>
+                    <h2>@(_editor.IsExisting ? _editor.AssetTag : "New Asset")</h2>
+                </div>
+                @if (_editor.IsExisting)
+                {
+                    <button class="button button-secondary" @onclick="StartCreate">Reset</button>
+                }
+            </div>
+
+            <EditForm Model="@_editor" OnValidSubmit="SaveAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label>Asset Tag</label>
+                        <InputText class="input-control" @bind-Value="_editor.AssetTag" />
+                    </div>
+                    <div class="field-group">
+                        <label>Serial Number</label>
+                        <InputText class="input-control" @bind-Value="_editor.SerialNumber" />
+                    </div>
+                    <div class="field-group">
+                        <label>Type</label>
+                        <InputSelect class="input-control" @bind-Value="_editor.Type">
+                            @foreach (var type in AppCatalogs.AssetTypes)
+                            {
+                                <option value="@type">@type</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field-group">
+                        <label>Status</label>
+                        <InputSelect class="input-control" @bind-Value="_editor.Status">
+                            @foreach (var status in AppCatalogs.AssetStatuses)
+                            {
+                                <option value="@status">@status</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field-group">
+                        <label>Manufacturer</label>
+                        <InputText class="input-control" @bind-Value="_editor.Manufacturer" />
+                    </div>
+                    <div class="field-group">
+                        <label>Model</label>
+                        <InputText class="input-control" @bind-Value="_editor.Model" />
+                    </div>
+                    <div class="field-group">
+                        <label>Department</label>
+                        <InputText class="input-control" @bind-Value="_editor.Department" />
+                    </div>
+                    <div class="field-group">
+                        <label>Location</label>
+                        <InputText class="input-control" @bind-Value="_editor.Location" />
+                    </div>
+                    <div class="field-group">
+                        <label>Purchase Date</label>
+                        <InputDate class="input-control" @bind-Value="_editor.PurchaseDate" />
+                    </div>
+                    <div class="field-group">
+                        <label>Warranty End</label>
+                        <InputDate class="input-control" @bind-Value="_editor.WarrantyEndDate" />
+                    </div>
+                    <div class="field-group">
+                        <label>End of Life</label>
+                        <InputDate class="input-control" @bind-Value="_editor.EndOfLifeDate" />
+                    </div>
+                    <div class="field-group field-group-full">
+                        <label>Notes</label>
+                        <InputTextArea class="input-control input-control-textarea" @bind-Value="_editor.Notes" />
+                    </div>
+                </div>
+
+                <div class="editor-actions">
+                    <button class="button button-primary" type="submit" disabled="@_isSaving">
+                        @(_isSaving ? "Saving..." : (_editor.IsExisting ? "Save Changes" : "Create Asset"))
+                    </button>
+                    @if (_editor.IsExisting)
+                    {
+                        <button class="button button-danger" type="button" disabled="@_isDeleting" @onclick="DeleteAsync">
+                            @(_isDeleting ? "Deleting..." : "Delete")
+                        </button>
+                    }
+                </div>
+            </EditForm>
+        }
+    </article>
+</section>
+
+@code {
+    private readonly List<AssetResponse> _assets = [];
+    private readonly List<string> _messages = [];
+    private AssetEditorModel _editor = AssetEditorModel.CreateEmpty();
+    private AssetResponse? _selectedAsset;
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _isDeleting;
+    private string _search = string.Empty;
+    private string _sort = "updated-desc";
+    private string _messageClass = "message-panel message-panel-error";
+    private int _currentPage = 1;
+    private int _pageSize = 25;
+
+    private bool CanWrite => AppRoles.CanWriteAssets(AuthSessionService.CurrentSession?.User?.Role);
+
+    private string Search
+    {
+        get => _search;
+        set
+        {
+            if (_search == value)
+            {
+                return;
+            }
+
+            _search = value;
+            ResetPagination();
+        }
+    }
+
+    private string Sort
+    {
+        get => _sort;
+        set
+        {
+            if (_sort == value)
+            {
+                return;
+            }
+
+            _sort = value;
+            ResetPagination();
+        }
+    }
+
+    private List<AssetResponse> FilteredAssets =>
+        ApplySorting(_assets
+            .Where(asset =>
+                string.IsNullOrWhiteSpace(_search) ||
+                $"{asset.AssetTag} {asset.SerialNumber} {asset.Type} {asset.Manufacturer} {asset.Model} {asset.Status} {asset.Department} {asset.Location}"
+                    .Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .ToList());
+
+    protected override async Task OnInitializedAsync() => await LoadAssetsAsync();
+
+    private async Task LoadAssetsAsync(string? selectedId = null)
+    {
+        _isLoading = true;
+        _messages.Clear();
+
+        try
+        {
+            var assets = await AssetApiService.GetAllAsync();
+            _assets.Clear();
+            _assets.AddRange(assets);
+
+            if (!string.IsNullOrWhiteSpace(selectedId))
+            {
+                var selected = _assets.FirstOrDefault(asset => asset.Id == selectedId);
+                if (selected is not null)
+                {
+                    SelectAsset(selected);
+                }
+            }
+            else if (_selectedAsset is not null)
+            {
+                var selected = _assets.FirstOrDefault(asset => asset.Id == _selectedAsset.Id);
+                _selectedAsset = selected;
+                _editor = selected is null ? AssetEditorModel.CreateEmpty() : AssetEditorModel.FromResponse(selected);
+            }
+        }
+        catch (ApiException exception)
+        {
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            ClampCurrentPage();
+            _isLoading = false;
+        }
+    }
+
+    private void StartCreate()
+    {
+        _messages.Clear();
+        _selectedAsset = null;
+        _editor = AssetEditorModel.CreateEmpty();
+    }
+
+    private void SelectAsset(AssetResponse asset)
+    {
+        _messages.Clear();
+        _selectedAsset = asset;
+        _editor = AssetEditorModel.FromResponse(asset);
+    }
+
+    private async Task SaveAsync()
+    {
+        _messages.Clear();
+        _isSaving = true;
+
+        try
+        {
+            AssetResponse savedAsset;
+            if (_editor.IsExisting)
+            {
+                savedAsset = await AssetApiService.UpdateAsync(_editor.Id, _editor.ToRequest());
+                _messageClass = "message-panel message-panel-success";
+                _messages.Add("Asset updated successfully.");
+            }
+            else
+            {
+                savedAsset = await AssetApiService.CreateAsync(_editor.ToRequest());
+                _messageClass = "message-panel message-panel-success";
+                _messages.Add("Asset created successfully.");
+            }
+
+            await LoadAssetsAsync(savedAsset.Id);
+        }
+        catch (ApiException exception)
+        {
+            _messageClass = "message-panel message-panel-error";
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedAsset is null)
+        {
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Delete asset '{_selectedAsset.AssetTag}'?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _messages.Clear();
+        _isDeleting = true;
+
+        try
+        {
+            await AssetApiService.DeleteAsync(_selectedAsset.Id);
+            _messageClass = "message-panel message-panel-success";
+            _messages.Add("Asset deleted successfully.");
+            StartCreate();
+            await LoadAssetsAsync();
+        }
+        catch (ApiException exception)
+        {
+            _messageClass = "message-panel message-panel-error";
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private string GetRowClass(string assetId) =>
+        _selectedAsset?.Id == assetId ? "is-selected" : string.Empty;
+
+    private List<AssetResponse> ApplySorting(List<AssetResponse> assets) =>
+        _sort switch
+        {
+            "tag-asc" => assets.OrderBy(asset => asset.AssetTag).ToList(),
+            "purchase-desc" => assets.OrderByDescending(asset => asset.PurchaseDate).ToList(),
+            _ => assets.OrderByDescending(asset => asset.UpdatedAt).ToList()
+        };
+
+    private List<AssetResponse> GetPagedAssets(IReadOnlyList<AssetResponse> assets) =>
+        assets
+            .Skip((_currentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+
+    private void SetCurrentPage(int page)
+    {
+        _currentPage = page;
+        ClampCurrentPage();
+    }
+
+    private void SetPageSize(int pageSize)
+    {
+        _pageSize = pageSize;
+        ResetPagination();
+    }
+
+    private void ResetPagination() => _currentPage = 1;
+
+    private void ClampCurrentPage()
+    {
+        var totalPages = Math.Max(1, (int)Math.Ceiling(FilteredAssets.Count / (double)_pageSize));
+        _currentPage = Math.Clamp(_currentPage, 1, totalPages);
+    }
+
+    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("yyyy-MM-dd");
+}

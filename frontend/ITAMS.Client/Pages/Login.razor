@@ -1,0 +1,118 @@
+@page "/login"
+@layout PublicLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AuthService AuthService
+@inject AuthSessionService AuthSessionService
+@inject NavigationManager NavigationManager
+
+<div class="login-page">
+    <div class="login-backdrop"></div>
+    <section class="login-panel">
+        <div class="login-panel__content">
+            <p class="eyebrow">IT Asset Management System</p>
+            <h1>Sign in to continue</h1>
+            <p class="page-intro">Use your ITAMS credentials to access the current asset, assignment, user, and audit workflows.</p>
+
+            <MessagePanel Messages="@_messages" CssClass="@_messageClass" />
+
+            <EditForm Model="@_formModel" OnValidSubmit="HandleSubmitAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="field-group">
+                    <label for="identifier">Username or Email</label>
+                    <InputText id="identifier" class="input-control" @bind-Value="_formModel.Identifier" />
+                </div>
+
+                <div class="field-group">
+                    <label for="password">Password</label>
+                    <InputText id="password" type="password" class="input-control" @bind-Value="_formModel.Password" />
+                </div>
+
+                <button class="button button-primary button-wide" type="submit" disabled="@_isSubmitting">
+                    @(_isSubmitting ? "Signing In..." : "Sign In")
+                </button>
+            </EditForm>
+
+            <div class="login-support">
+                <button class="login-clear-button" type="button" disabled="@(_isSubmitting || _isClearingSession)" @onclick="ClearSavedSessionAsync">
+                    @(_isClearingSession ? "Clearing saved session..." : "Clear saved session")
+                </button>
+                <p>Use this if a previous browser session is interfering with signing in as a different user.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="login-hero">
+        <div class="hero-card">
+            <img class="hero-logo" src="images/logo.png" alt="ITAMS logo" />
+            <h2>Keep every asset traceable from intake to retirement.</h2>
+            <p>Built for the workflows the current API already supports: assets, assignments, users, audit history, and password management.</p>
+        </div>
+    </section>
+</div>
+
+@code {
+    private readonly LoginFormModel _formModel = new();
+    private readonly List<string> _messages = [];
+    private bool _isSubmitting;
+    private bool _isClearingSession;
+    private string _messageClass = "message-panel message-panel-error";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authenticationState.User.Identity?.IsAuthenticated == true)
+        {
+            NavigationManager.NavigateTo("/home", true);
+        }
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        _messages.Clear();
+        _messageClass = "message-panel message-panel-error";
+        _isSubmitting = true;
+
+        try
+        {
+            if (AuthSessionService.CurrentSession is not null)
+            {
+                await AuthSessionService.ClearSessionAsync(false);
+            }
+
+            await AuthService.LoginAsync(_formModel);
+            NavigationManager.NavigateTo("/home", true);
+        }
+        catch (ApiException exception)
+        {
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task ClearSavedSessionAsync()
+    {
+        _messages.Clear();
+        _isClearingSession = true;
+
+        try
+        {
+            await AuthSessionService.ClearSessionAsync(false);
+            _messageClass = "message-panel message-panel-success";
+            _messages.Add("Saved session cleared. You can sign in again.");
+        }
+        finally
+        {
+            _isClearingSession = false;
+        }
+    }
+}

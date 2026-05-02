@@ -1,0 +1,187 @@
+@inherits LayoutComponentBase
+@implements IAsyncDisposable
+@inject AuthService AuthService
+@inject AuthSessionService AuthSessionService
+@inject IJSRuntime JSRuntime
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand-block">
+            <img class="brand-logo" src="images/logo.png" alt="ITAMS logo" />
+            <div>
+                <p class="brand-kicker">ITAMS</p>
+                <p class="brand-name">Asset Management</p>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Primary">
+            <NavLink href="/home" Match="NavLinkMatch.All">Home</NavLink>
+            @if (AppRoles.CanReadReports(User?.Role))
+            {
+                <NavLink href="/reports">Reports</NavLink>
+            }
+            @if (AppRoles.CanReadAssets(User?.Role))
+            {
+                <NavLink href="/assets">Assets</NavLink>
+            }
+            @if (AppRoles.CanReadAssignments(User?.Role))
+            {
+                <NavLink href="/assignments">Assignments</NavLink>
+            }
+            @if (AppRoles.CanReadUsers(User?.Role))
+            {
+                <NavLink href="/users">Users</NavLink>
+            }
+            @if (AppRoles.CanReadHistory(User?.Role))
+            {
+                <NavLink href="/history">History</NavLink>
+            }
+            <NavLink href="/account/change-password">Change Password</NavLink>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p class="footer-label">Current Role</p>
+            <strong>@(User?.Role ?? "Guest")</strong>
+            <span>@(User?.Department ?? "No department")</span>
+        </div>
+    </aside>
+
+    <main class="shell-main">
+        <div class="topbar-sentinel" @ref="_topbarSentinelRef" aria-hidden="true"></div>
+
+        <div class="topbar-shell" @ref="_topbarShellRef">
+            <header class="topbar">
+                <div>
+                    <p class="eyebrow">Secure. Scalable. Seamless Asset Management.</p>
+                    <p class="topbar-title">Operations workspace</p>
+                </div>
+                <div class="topbar-actions">
+                    <div class="user-card">
+                        <strong>@(User?.DisplayName ?? "Unknown user")</strong>
+                        <span>@(User?.Email ?? string.Empty)</span>
+                    </div>
+                    <div class="segmented-control theme-toggle" role="group" aria-label="Choose color theme">
+                        <button class="@GetThemeButtonClass(LightTheme)"
+                                type="button"
+                                aria-pressed="@(_currentTheme == LightTheme)"
+                                @onclick="@(() => SetThemeAsync(LightTheme))">
+                            Light
+                        </button>
+                        <button class="@GetThemeButtonClass(DarkTheme)"
+                                type="button"
+                                aria-pressed="@(_currentTheme == DarkTheme)"
+                                @onclick="@(() => SetThemeAsync(DarkTheme))">
+                            Dark
+                        </button>
+                    </div>
+                    <button class="button button-secondary topbar-action-button" @onclick="LogoutAsync">Sign Out</button>
+                </div>
+            </header>
+        </div>
+
+        <section class="page-surface">
+            @Body
+        </section>
+    </main>
+</div>
+
+@code {
+    private const string DefaultTheme = "dark";
+    private const string LightTheme = "light";
+    private const string DarkTheme = "dark";
+    private ElementReference _topbarShellRef;
+    private ElementReference _topbarSentinelRef;
+    private string? _layoutObserverId;
+    private string _currentTheme = DefaultTheme;
+
+    private CurrentUserResponse? User => AuthSessionService.CurrentSession?.User;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var shouldRefresh = false;
+
+        try
+        {
+            var storedTheme = await JSRuntime.InvokeAsync<string>("itamsTheme.get");
+            var normalizedTheme = NormalizeTheme(storedTheme);
+            if (!string.Equals(_currentTheme, normalizedTheme, StringComparison.Ordinal))
+            {
+                _currentTheme = normalizedTheme;
+                shouldRefresh = true;
+            }
+        }
+        catch (JSException)
+        {
+            _currentTheme = DefaultTheme;
+        }
+
+        try
+        {
+            _layoutObserverId = await JSRuntime.InvokeAsync<string>(
+                "itamsLayout.observeTopbar",
+                _topbarShellRef,
+                _topbarSentinelRef);
+        }
+        catch (JSException)
+        {
+            _layoutObserverId = null;
+        }
+
+        if (shouldRefresh)
+        {
+            StateHasChanged();
+        }
+    }
+
+    private string GetThemeButtonClass(string theme) =>
+        string.Equals(_currentTheme, NormalizeTheme(theme), StringComparison.Ordinal)
+            ? "segment-button is-active"
+            : "segment-button";
+
+    private async Task SetThemeAsync(string theme)
+    {
+        var normalizedTheme = NormalizeTheme(theme);
+        if (string.Equals(_currentTheme, normalizedTheme, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var previousTheme = _currentTheme;
+        _currentTheme = normalizedTheme;
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("itamsTheme.set", normalizedTheme);
+        }
+        catch (JSException)
+        {
+            _currentTheme = previousTheme;
+        }
+    }
+
+    private static string NormalizeTheme(string? theme) =>
+        string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase) ? "light" : DefaultTheme;
+
+    private async Task LogoutAsync() => await AuthService.LogoutAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_layoutObserverId))
+        {
+            return;
+        }
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("itamsLayout.disposeTopbar", _layoutObserverId);
+        }
+        catch (JSException)
+        {
+        }
+    }
+}

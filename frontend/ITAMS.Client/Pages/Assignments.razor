@@ -1,0 +1,401 @@
+@page "/assignments"
+@attribute [Authorize(Roles = "Admin,Manager,Technician,Auditor")]
+@inject AssignmentApiService AssignmentApiService
+@inject AssetApiService AssetApiService
+@inject UserApiService UserApiService
+@inject AuthSessionService AuthSessionService
+@inject IJSRuntime JSRuntime
+
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Allocation</p>
+        <h1>Assignments</h1>
+        <p class="page-intro">Create and maintain assignment records through the live assignments API.</p>
+    </div>
+    @if (CanWrite)
+    {
+        <button class="button button-primary" @onclick="StartCreate">New Assignment</button>
+    }
+</section>
+
+<MessagePanel Messages="@_messages" CssClass="@_messageClass" />
+
+<section class="workspace-grid">
+    <article class="list-card">
+        <div class="list-toolbar">
+            <InputText class="input-control" placeholder="Search assignments..." @bind-Value="Search" />
+        </div>
+
+        @{
+            var filteredAssignments = FilteredAssignments;
+            var pagedAssignments = GetPagedAssignments(filteredAssignments);
+        }
+
+        @if (_isLoading)
+        {
+            <p class="empty-state">Loading assignments...</p>
+        }
+        else if (filteredAssignments.Count == 0)
+        {
+            <p class="empty-state">No assignments matched your current filter.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Asset</th>
+                            <th>User</th>
+                            <th>Start</th>
+                            <th>End</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var assignment in pagedAssignments)
+                        {
+                            <tr class="@GetRowClass(assignment.Id)" @onclick="() => SelectAssignment(assignment)">
+                                <td>@GetAssetLabel(assignment.AssetId)</td>
+                                <td>@GetUserLabel(assignment.UserId)</td>
+                                <td>@FormatDate(assignment.StartDate)</td>
+                                <td>@(assignment.EndDate is null ? "Open" : FormatDate(assignment.EndDate.Value))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <PaginationControls TotalItemCount="@filteredAssignments.Count"
+                                CurrentPage="@_currentPage"
+                                CurrentPageChanged="SetCurrentPage"
+                                PageSize="@_pageSize"
+                                PageSizeChanged="SetPageSize" />
+        }
+    </article>
+
+    <article class="editor-card">
+        @if (!CanWrite)
+        {
+            @if (_selectedAssignment is null)
+            {
+                <p class="empty-state">Select an assignment to review its details.</p>
+            }
+            else
+            {
+                <div class="detail-panel">
+                    <div class="detail-panel__header">
+                        <div>
+                            <p class="summary-label">Selected Assignment</p>
+                            <h2>@GetAssetLabel(_selectedAssignment.AssetId)</h2>
+                        </div>
+                    </div>
+                    <dl class="detail-list">
+                        <div><dt>User</dt><dd>@GetUserLabel(_selectedAssignment.UserId)</dd></div>
+                        <div><dt>Start</dt><dd>@FormatDate(_selectedAssignment.StartDate)</dd></div>
+                        <div><dt>End</dt><dd>@(_selectedAssignment.EndDate is null ? "Open" : FormatDate(_selectedAssignment.EndDate.Value))</dd></div>
+                        <div><dt>Assigned By</dt><dd>@_selectedAssignment.AssignedByUserId</dd></div>
+                        <div><dt>Notes</dt><dd>@(_selectedAssignment.Notes ?? "None")</dd></div>
+                    </dl>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="editor-card__header">
+                <div>
+                    <p class="summary-label">@(_editor.IsExisting ? "Editing Assignment" : "Create Assignment")</p>
+                    <h2>@(_editor.IsExisting ? GetAssetLabel(_editor.AssetId) : "New Assignment")</h2>
+                </div>
+                @if (_editor.IsExisting)
+                {
+                    <button class="button button-secondary" @onclick="StartCreate">Reset</button>
+                }
+            </div>
+
+            @if (!CanLookupUsers)
+            {
+                <p class="hint-banner">Your role can manage assignments but cannot browse users from the current API. Enter the target user ID manually.</p>
+            }
+
+            <EditForm Model="@_editor" OnValidSubmit="SaveAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label>Asset</label>
+                        <InputSelect class="input-control" @bind-Value="_editor.AssetId">
+                            <option value="">Select an asset</option>
+                            @foreach (var asset in _assets.OrderBy(asset => asset.AssetTag))
+                            {
+                                <option value="@asset.Id">@asset.AssetTag - @asset.Model</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="field-group">
+                        <label>User</label>
+                        @if (CanLookupUsers)
+                        {
+                            <InputSelect class="input-control" @bind-Value="_editor.UserId">
+                                <option value="">Select a user</option>
+                                @foreach (var user in _users.OrderBy(user => user.DisplayName))
+                                {
+                                    <option value="@user.Id">@user.DisplayName (@user.Username)</option>
+                                }
+                            </InputSelect>
+                        }
+                        else
+                        {
+                            <InputText class="input-control" @bind-Value="_editor.UserId" />
+                        }
+                    </div>
+
+                    <div class="field-group">
+                        <label>Start Date</label>
+                        <InputDate class="input-control" @bind-Value="_editor.StartDate" />
+                    </div>
+
+                    <div class="field-group">
+                        <label>End Date</label>
+                        <InputDate class="input-control" @bind-Value="_editor.EndDate" />
+                    </div>
+
+                    <div class="field-group field-group-full">
+                        <label>Notes</label>
+                        <InputTextArea class="input-control input-control-textarea" @bind-Value="_editor.Notes" />
+                    </div>
+                </div>
+
+                <div class="editor-actions">
+                    <button class="button button-primary" type="submit" disabled="@_isSaving">
+                        @(_isSaving ? "Saving..." : (_editor.IsExisting ? "Save Changes" : "Create Assignment"))
+                    </button>
+                    @if (_editor.IsExisting)
+                    {
+                        <button class="button button-danger" type="button" disabled="@_isDeleting" @onclick="DeleteAsync">
+                            @(_isDeleting ? "Deleting..." : "Delete")
+                        </button>
+                    }
+                </div>
+            </EditForm>
+        }
+    </article>
+</section>
+
+@code {
+    private readonly List<AssignmentResponse> _assignments = [];
+    private readonly List<AssetResponse> _assets = [];
+    private readonly List<UserResponse> _users = [];
+    private readonly List<string> _messages = [];
+    private AssignmentEditorModel _editor = AssignmentEditorModel.CreateEmpty();
+    private AssignmentResponse? _selectedAssignment;
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _isDeleting;
+    private string _search = string.Empty;
+    private string _messageClass = "message-panel message-panel-error";
+    private int _currentPage = 1;
+    private int _pageSize = 25;
+
+    private bool CanWrite => AppRoles.CanWriteAssignments(AuthSessionService.CurrentSession?.User?.Role);
+    private bool CanLookupUsers => AppRoles.CanReadUsers(AuthSessionService.CurrentSession?.User?.Role);
+
+    private string Search
+    {
+        get => _search;
+        set
+        {
+            if (_search == value)
+            {
+                return;
+            }
+
+            _search = value;
+            ResetPagination();
+        }
+    }
+
+    private List<AssignmentResponse> FilteredAssignments =>
+        _assignments
+            .Where(assignment =>
+                string.IsNullOrWhiteSpace(_search) ||
+                $"{GetAssetLabel(assignment.AssetId)} {GetUserLabel(assignment.UserId)} {assignment.AssetId} {assignment.UserId} {assignment.Notes}"
+                    .Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(assignment => assignment.StartDate)
+            .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync(string? selectedId = null)
+    {
+        _isLoading = true;
+        _messages.Clear();
+
+        try
+        {
+            var assignmentsTask = AssignmentApiService.GetAllAsync();
+            var assetsTask = AssetApiService.GetAllAsync();
+
+            await Task.WhenAll(assignmentsTask, assetsTask);
+            _assignments.Clear();
+            _assignments.AddRange(assignmentsTask.Result);
+            _assets.Clear();
+            _assets.AddRange(assetsTask.Result);
+
+            _users.Clear();
+            if (CanLookupUsers)
+            {
+                var users = await UserApiService.GetAllAsync();
+                _users.AddRange(users);
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedId))
+            {
+                var selected = _assignments.FirstOrDefault(assignment => assignment.Id == selectedId);
+                if (selected is not null)
+                {
+                    SelectAssignment(selected);
+                }
+            }
+            else if (_selectedAssignment is not null)
+            {
+                var selected = _assignments.FirstOrDefault(assignment => assignment.Id == _selectedAssignment.Id);
+                _selectedAssignment = selected;
+                _editor = selected is null ? AssignmentEditorModel.CreateEmpty() : AssignmentEditorModel.FromResponse(selected);
+            }
+        }
+        catch (ApiException exception)
+        {
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            ClampCurrentPage();
+            _isLoading = false;
+        }
+    }
+
+    private void StartCreate()
+    {
+        _messages.Clear();
+        _selectedAssignment = null;
+        _editor = AssignmentEditorModel.CreateEmpty();
+    }
+
+    private void SelectAssignment(AssignmentResponse assignment)
+    {
+        _messages.Clear();
+        _selectedAssignment = assignment;
+        _editor = AssignmentEditorModel.FromResponse(assignment);
+    }
+
+    private async Task SaveAsync()
+    {
+        _messages.Clear();
+        _isSaving = true;
+
+        try
+        {
+            AssignmentResponse savedAssignment;
+            if (_editor.IsExisting)
+            {
+                savedAssignment = await AssignmentApiService.UpdateAsync(_editor.Id, _editor.ToRequest());
+                _messageClass = "message-panel message-panel-success";
+                _messages.Add("Assignment updated successfully.");
+            }
+            else
+            {
+                savedAssignment = await AssignmentApiService.CreateAsync(_editor.ToRequest());
+                _messageClass = "message-panel message-panel-success";
+                _messages.Add("Assignment created successfully.");
+            }
+
+            await LoadAsync(savedAssignment.Id);
+        }
+        catch (ApiException exception)
+        {
+            _messageClass = "message-panel message-panel-error";
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedAssignment is null)
+        {
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Delete assignment '{_selectedAssignment.Id}'?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _messages.Clear();
+        _isDeleting = true;
+
+        try
+        {
+            await AssignmentApiService.DeleteAsync(_selectedAssignment.Id);
+            _messageClass = "message-panel message-panel-success";
+            _messages.Add("Assignment deleted successfully.");
+            StartCreate();
+            await LoadAsync();
+        }
+        catch (ApiException exception)
+        {
+            _messageClass = "message-panel message-panel-error";
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private string GetRowClass(string assignmentId) =>
+        _selectedAssignment?.Id == assignmentId ? "is-selected" : string.Empty;
+
+    private string GetAssetLabel(string assetId) =>
+        _assets.FirstOrDefault(asset => asset.Id == assetId) is { } asset
+            ? $"{asset.AssetTag} - {asset.Model}"
+            : assetId;
+
+    private string GetUserLabel(string userId) =>
+        _users.FirstOrDefault(user => user.Id == userId) is { } user
+            ? $"{user.DisplayName} ({user.Username})"
+            : userId;
+
+    private List<AssignmentResponse> GetPagedAssignments(IReadOnlyList<AssignmentResponse> assignments) =>
+        assignments
+            .Skip((_currentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+
+    private void SetCurrentPage(int page)
+    {
+        _currentPage = page;
+        ClampCurrentPage();
+    }
+
+    private void SetPageSize(int pageSize)
+    {
+        _pageSize = pageSize;
+        ResetPagination();
+    }
+
+    private void ResetPagination() => _currentPage = 1;
+
+    private void ClampCurrentPage()
+    {
+        var totalPages = Math.Max(1, (int)Math.Ceiling(FilteredAssignments.Count / (double)_pageSize));
+        _currentPage = Math.Clamp(_currentPage, 1, totalPages);
+    }
+
+    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("yyyy-MM-dd");
+}

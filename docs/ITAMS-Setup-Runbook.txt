@@ -1,0 +1,98 @@
+ITAMS Cross-Machine Setup Runbook
+
+Generated on 2026-03-22 18:43:48
+
+Overview
+
+This runbook explains how to restore, configure, and run the current ITAMS solution on another Windows computer. The solution contains an ASP.NET Core API, a Blazor WebAssembly frontend, and an API test project.
+All commands in this guide assume Windows PowerShell and that the current working directory is the repository root.
+
+Software and Access Dependencies
+
+- .NET 10 SDK
+- Internet access for NuGet package restore
+- Access to a MongoDB Atlas cluster or another valid MongoDB connection string
+- A modern browser for the Blazor WebAssembly frontend
+- Optional development tools such as Visual Studio 2022 or Visual Studio Code
+
+Repository Structure
+
+- ITAMS.Api - ASP.NET Core Web API with MongoDB-backed data access, JWT authentication, and Swagger
+- ITAMS.Api.Tests - automated API and integration tests
+- frontend\ITAMS.Client - Blazor WebAssembly frontend application
+- scripts - repository utility scripts, including this runbook generator
+
+Required Configuration
+
+The API uses .NET user secrets for machine-specific values. Do not place real secrets in source-controlled files.
+Run the following commands from the repository root to configure a new machine:
+    dotnet user-secrets --project ./ITAMS.Api/ITAMS.Api.csproj set "MongoDb:ConnectionString" "<MONGODB_CONNECTION_STRING>"
+    dotnet user-secrets --project ./ITAMS.Api/ITAMS.Api.csproj set "Jwt:SigningKey" "<JWT_SIGNING_KEY_AT_LEAST_32_CHARACTERS>"
+    dotnet user-secrets --project ./ITAMS.Api/ITAMS.Api.csproj set "BootstrapAdmin:Username" "<BOOTSTRAP_ADMIN_USERNAME>"
+    dotnet user-secrets --project ./ITAMS.Api/ITAMS.Api.csproj set "BootstrapAdmin:DisplayName" "<BOOTSTRAP_ADMIN_DISPLAY_NAME>"
+    dotnet user-secrets --project ./ITAMS.Api/ITAMS.Api.csproj set "BootstrapAdmin:Email" "<BOOTSTRAP_ADMIN_EMAIL>"
+    dotnet user-secrets --project ./ITAMS.Api/ITAMS.Api.csproj set "BootstrapAdmin:Department" "<BOOTSTRAP_ADMIN_DEPARTMENT>"
+    dotnet user-secrets --project ./ITAMS.Api/ITAMS.Api.csproj set "BootstrapAdmin:Password" "<BOOTSTRAP_ADMIN_PASSWORD>"
+Important notes:
+- Jwt:SigningKey must be at least 32 characters long.
+- MongoDb:ConnectionString can point to MongoDB Atlas or another reachable MongoDB instance.
+- Bootstrap admin seeding only runs when the configured database has no login-capable users.
+- If the database already contains users with passwords, sign in with an existing valid account instead of expecting new bootstrap credentials to be created.
+- MongoDB Atlas network access rules, cluster availability, and database user credentials must allow connections from the new machine.
+
+Setup and Startup Steps
+
+Trust the local HTTPS development certificate if the browser or runtime reports certificate trust issues:
+    dotnet dev-certs https --trust
+Restore the solution:
+    dotnet restore ./ITAMS.sln
+Build the solution:
+    dotnet build ./ITAMS.sln -c Debug
+Start the API in terminal 1:
+    dotnet watch --project ./ITAMS.Api/ITAMS.Api.csproj run --launch-profile https
+Start the frontend in terminal 2:
+    dotnet watch --project ./frontend/ITAMS.Client/ITAMS.Client.csproj run --launch-profile https
+Once both processes are running, browse to the following URLs:
+    API Swagger: https://localhost:7004/swagger
+    Frontend: https://localhost:5173
+
+Validation and Smoke Test
+
+- Open https://localhost:7004/swagger and confirm the Swagger UI loads.
+- Open https://localhost:5173 and confirm the Blazor login page loads.
+- Sign in with an existing valid user or with the configured bootstrap admin if it was seeded.
+- Verify the main navigation loads and the Home, Assets, Assignments, Users, History, and Change Password pages are reachable for the signed-in role.
+- Sign out, sign back in, and refresh the page to confirm the client can restore the current session.
+Optional: run the API tests after setup if you want an additional verification pass.
+    dotnet test .\ITAMS.Api.Tests\ITAMS.Api.Tests.csproj -c Release
+
+Troubleshooting
+
+MongoDB Connection Failures
+
+If the API times out or reports that it cannot connect to MongoDB, verify the MongoDb:ConnectionString user secret, Atlas network access rules, and the database user credentials. The new machine must be allowed to reach the target cluster.
+
+HTTPS Certificate Problems
+
+If localhost HTTPS endpoints show trust warnings or fail to start cleanly, run dotnet dev-certs https --trust and restart the browser and both dotnet watch processes.
+
+Ports Already in Use
+
+If port 7004 or 5173 is already in use, stop the conflicting process or change the launch profile ports. If you change ports or hosts, also update frontend\ITAMS.Client\wwwroot\appsettings.json and the Cors:AllowedOrigins entries in ITAMS.Api\appsettings.json.
+
+Login or Stale Session Problems
+
+If login succeeds in the API but the browser behaves as if the session is invalid, clear the login page session state or remove the local storage key named itams.auth.session and try again.
+
+Bootstrap Admin Not Created
+
+Bootstrap admin seeding is dormant when login-capable users already exist in the configured database. In that case, use an existing account or point the API at a clean development database if you need bootstrap credentials to be created.
+
+Operational Notes
+
+- Current API HTTPS URL: https://localhost:7004
+- Current frontend HTTPS URL: https://localhost:5173
+- Current frontend ApiBaseUrl: https://localhost:7004/
+- Development access tokens are configured for 60 minutes and refresh tokens are configured for 6 hours.
+- Keep placeholders in documentation and put real secrets only into the destination machine's user secrets store.
+- This guide is for local development and handoff, not for production deployment.

@@ -1,0 +1,200 @@
+@using System.Globalization
+@using System.Net
+@using Microsoft.AspNetCore.Components
+
+@if (VisiblePoints.Count == 0)
+{
+    <p class="empty-state">@EmptyText</p>
+}
+else
+{
+    <div class="line-chart">
+        <div class="line-chart__canvas">
+            <svg class="line-chart__svg" viewBox="0 0 100 60" role="img" aria-label="@AriaLabel">
+                @AxisTitleMarkup
+
+                @foreach (var gridLine in GridLines)
+                {
+                    @GetTickMarkup(gridLine)
+                    <line class="line-chart__grid" x1="@LeftPadding" y1="@gridLine.Y" x2="@RightPadding" y2="@gridLine.Y" />
+                }
+
+                <polyline class="line-chart__path" points="@PolylinePoints" />
+
+                @foreach (var point in ChartPoints)
+                {
+                    <circle class="line-chart__point" cx="@point.X" cy="@point.Y" r="1.8">
+                        <title>@($"{point.Label}: {point.Value:N0}")</title>
+                    </circle>
+                }
+            </svg>
+        </div>
+
+        <div class="line-chart__labels">
+            @foreach (var label in SampledLabels)
+            {
+                <span>@label.Text</span>
+            }
+        </div>
+
+        <div class="line-chart__summary">
+            <div class="line-chart__summary-item">
+                <span>First</span>
+                <strong>@($"{VisiblePoints.First().Value:N0}")</strong>
+                <small>@VisiblePoints.First().Label</small>
+            </div>
+            <div class="line-chart__summary-item">
+                <span>Peak</span>
+                <strong>@($"{PeakPoint.Value:N0}")</strong>
+                <small>@PeakPoint.Label</small>
+            </div>
+            <div class="line-chart__summary-item">
+                <span>Latest</span>
+                <strong>@($"{VisiblePoints.Last().Value:N0}")</strong>
+                <small>@VisiblePoints.Last().Label</small>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const double AxisTitleX = -25;
+    private const double AxisTitleY = 3.4;
+    private const double TickLabelX = 16;
+    private const double LeftPadding = 20;
+    private const double TopPadding = 4;
+    private const double PlotWidth = 77;
+    private const double PlotHeight = 42;
+    private const double RightPadding = LeftPadding + PlotWidth;
+
+    [Parameter]
+    public IReadOnlyList<ReportsTimeSeriesPointResponse>? Points { get; set; }
+
+    [Parameter]
+    public string EmptyText { get; set; } = "No data is available for this chart.";
+
+    [Parameter]
+    public string AriaLabel { get; set; } = "Report line chart";
+
+    [Parameter]
+    public string YAxisLabel { get; set; } = "Count";
+
+    private IReadOnlyList<ReportsTimeSeriesPointResponse> VisiblePoints => Points ?? Array.Empty<ReportsTimeSeriesPointResponse>();
+
+    private int MaxValue => Math.Max(1, VisiblePoints.Max(point => point.Value));
+
+    private MarkupString AxisTitleMarkup =>
+        new($"""<text class="line-chart__axis-title" x="{FormatNumber(AxisTitleX)}" y="{FormatNumber(AxisTitleY)}" text-anchor="middle" transform="rotate(-90)">{WebUtility.HtmlEncode(YAxisLabel)}</text>""");
+
+    private MarkupString GetTickMarkup(GridLineModel gridLine) =>
+        new($"""<text class="line-chart__tick" x="{FormatNumber(TickLabelX)}" y="{FormatNumber(gridLine.Y)}" text-anchor="end" dominant-baseline="middle">{WebUtility.HtmlEncode(gridLine.Label)}</text>""");
+
+    private IReadOnlyList<GridLineModel> GridLines =>
+        Enumerable.Range(0, 5)
+            .Select(index =>
+            {
+                var factor = index / 4d;
+                var value = (int)Math.Round(MaxValue * (1d - factor), MidpointRounding.AwayFromZero);
+                return new GridLineModel
+                {
+                    Y = TopPadding + (PlotHeight * factor),
+                    Label = value.ToString("N0", CultureInfo.InvariantCulture)
+                };
+            })
+            .ToList();
+
+    private IReadOnlyList<ChartPointModel> ChartPoints =>
+        VisiblePoints
+            .Select((point, index) => new ChartPointModel
+            {
+                Label = point.Label,
+                Value = point.Value,
+                X = GetX(index),
+                Y = GetY(point.Value)
+            })
+            .ToList();
+
+    private string PolylinePoints
+    {
+        get
+        {
+            if (ChartPoints.Count == 1)
+            {
+                var point = ChartPoints[0];
+                return $"{FormatNumber(point.X)},{FormatNumber(point.Y)} {FormatNumber(point.X)},{FormatNumber(point.Y)}";
+            }
+
+            return string.Join(" ", ChartPoints.Select(point => $"{FormatNumber(point.X)},{FormatNumber(point.Y)}"));
+        }
+    }
+
+    private ReportsTimeSeriesPointResponse PeakPoint =>
+        VisiblePoints
+            .OrderByDescending(point => point.Value)
+            .ThenBy(point => point.BucketStart)
+            .First();
+
+    private IReadOnlyList<AxisLabelModel> SampledLabels
+    {
+        get
+        {
+            if (VisiblePoints.Count == 1)
+            {
+                return
+                [
+                    new AxisLabelModel
+                    {
+                        Text = VisiblePoints[0].Label
+                    }
+                ];
+            }
+
+            var targetCount = Math.Min(6, VisiblePoints.Count);
+            var indexes = new HashSet<int>();
+
+            for (var index = 0; index < targetCount; index++)
+            {
+                var sampleIndex = (int)Math.Round(index * (VisiblePoints.Count - 1d) / Math.Max(1, targetCount - 1), MidpointRounding.AwayFromZero);
+                indexes.Add(sampleIndex);
+            }
+
+            return indexes
+                .OrderBy(index => index)
+                .Select(index => new AxisLabelModel
+                {
+                    Text = VisiblePoints[index].Label
+                })
+                .ToList();
+        }
+    }
+
+    private double GetX(int index) =>
+        VisiblePoints.Count == 1
+            ? LeftPadding + (PlotWidth / 2d)
+            : LeftPadding + (PlotWidth * index / (VisiblePoints.Count - 1d));
+
+    private double GetY(int value) =>
+        TopPadding + PlotHeight - (PlotHeight * value / MaxValue);
+
+    private static string FormatNumber(double value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private sealed class GridLineModel
+    {
+        public double Y { get; init; }
+        public string Label { get; init; } = string.Empty;
+    }
+
+    private sealed class ChartPointModel
+    {
+        public string Label { get; init; } = string.Empty;
+        public int Value { get; init; }
+        public double X { get; init; }
+        public double Y { get; init; }
+    }
+
+    private sealed class AxisLabelModel
+    {
+        public string Text { get; init; } = string.Empty;
+    }
+}

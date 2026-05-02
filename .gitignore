@@ -1,0 +1,46 @@
+# Build outputs
+bin/
+obj/
+TestResults/
+
+# IDE and editor state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local .NET and temporary working folders
+.dotnet-home/
+.tmp_runbook/
+.tmp_runbook_edit/
+.tmp_runbook_verify/
+
+# Logs and diagnostics
+*.log
+*.trx
+*.blame
+*.coverage
+*.coveragexml
+
+# Published or server-side deployment output
+publish/
+artifacts/
+releases/
+
+# Local database exports and backups
+ITAMS.Dev.Backup/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets and local environment overrides
+*.secrets.json
+*.local.json
+.env
+.env.*
+!*.env.example

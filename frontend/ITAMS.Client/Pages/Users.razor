@@ -1,0 +1,427 @@
+@page "/users"
+@attribute [Authorize(Roles = "Admin,Manager,Auditor")]
+@inject UserApiService UserApiService
+@inject AuthSessionService AuthSessionService
+@inject IJSRuntime JSRuntime
+
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Directory</p>
+        <h1>Users</h1>
+        <p class="page-intro">Browse current user records. Admins can also create, update, and delete them through the existing users API.</p>
+    </div>
+    @if (CanWrite)
+    {
+        <button class="button button-primary" @onclick="StartCreate">New User</button>
+    }
+</section>
+
+<MessagePanel Messages="@_messages" CssClass="@_messageClass" />
+
+<section class="workspace-grid">
+    <article class="list-card">
+        <div class="list-toolbar">
+            <InputText class="input-control" placeholder="Search users..." @bind-Value="Search" />
+        </div>
+
+        @{
+            var filteredUsers = FilteredUsers;
+            var pagedUsers = GetPagedUsers(filteredUsers);
+        }
+
+        @if (_isLoading)
+        {
+            <p class="empty-state">Loading users...</p>
+        }
+        else if (filteredUsers.Count == 0)
+        {
+            <p class="empty-state">No users matched your current filter.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in pagedUsers)
+                        {
+                            <tr class="@GetRowClass(user.Id)" @onclick="() => SelectUser(user)">
+                                <td>@user.DisplayName</td>
+                                <td>@user.Username</td>
+                                <td>@user.Role</td>
+                                <td>@(user.IsActive ? "Active" : "Disabled")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <PaginationControls TotalItemCount="@filteredUsers.Count"
+                                CurrentPage="@_currentPage"
+                                CurrentPageChanged="SetCurrentPage"
+                                PageSize="@_pageSize"
+                                PageSizeChanged="SetPageSize" />
+        }
+    </article>
+
+    <article class="editor-card">
+        @if (!CanWrite)
+        {
+            @if (_selectedUser is null)
+            {
+                <p class="empty-state">Select a user to review the current record.</p>
+            }
+            else
+            {
+                <div class="detail-panel">
+                    <div class="detail-panel__header">
+                        <div>
+                            <p class="summary-label">Selected User</p>
+                            <h2>@_selectedUser.DisplayName</h2>
+                        </div>
+                    </div>
+                    <dl class="detail-list">
+                        <div><dt>Username</dt><dd>@_selectedUser.Username</dd></div>
+                        <div><dt>Email</dt><dd>@_selectedUser.Email</dd></div>
+                        <div><dt>Role</dt><dd>@_selectedUser.Role</dd></div>
+                        <div><dt>Department</dt><dd>@_selectedUser.Department</dd></div>
+                        <div><dt>Status</dt><dd>@(_selectedUser.IsActive ? "Active" : "Disabled")</dd></div>
+                        <div><dt>Created</dt><dd>@FormatDate(_selectedUser.CreatedAt)</dd></div>
+                        <div><dt>Updated</dt><dd>@FormatDate(_selectedUser.UpdatedAt)</dd></div>
+                    </dl>
+                </div>
+            }
+        }
+        else if (_selectedUser is null)
+        {
+            <div class="editor-card__header">
+                <div>
+                    <p class="summary-label">Create User</p>
+                    <h2>New User</h2>
+                </div>
+            </div>
+
+            <EditForm Model="@_createForm" OnValidSubmit="CreateAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label>Username</label>
+                        <InputText class="input-control" @bind-Value="_createForm.Username" />
+                    </div>
+                    <div class="field-group">
+                        <label>Display Name</label>
+                        <InputText class="input-control" @bind-Value="_createForm.DisplayName" />
+                    </div>
+                    <div class="field-group">
+                        <label>Email</label>
+                        <InputText class="input-control" @bind-Value="_createForm.Email" />
+                    </div>
+                    <div class="field-group">
+                        <label>Password</label>
+                        <InputText class="input-control" type="password" @bind-Value="_createForm.Password" />
+                    </div>
+                    <div class="field-group">
+                        <label>Role</label>
+                        <InputSelect class="input-control" @bind-Value="_createForm.Role">
+                            @foreach (var role in AppCatalogs.UserRoles)
+                            {
+                                <option value="@role">@role</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field-group">
+                        <label>Department</label>
+                        <InputText class="input-control" @bind-Value="_createForm.Department" />
+                    </div>
+                    <label class="checkbox-row">
+                        <InputCheckbox @bind-Value="_createForm.IsActive" />
+                        <span>Active user</span>
+                    </label>
+                </div>
+
+                <div class="editor-actions">
+                    <button class="button button-primary" type="submit" disabled="@_isSaving">
+                        @(_isSaving ? "Creating..." : "Create User")
+                    </button>
+                </div>
+            </EditForm>
+        }
+        else
+        {
+            <div class="editor-card__header">
+                <div>
+                    <p class="summary-label">Editing User</p>
+                    <h2>@_editForm.DisplayName</h2>
+                </div>
+                <button class="button button-secondary" @onclick="StartCreate">Create Instead</button>
+            </div>
+
+            <EditForm Model="@_editForm" OnValidSubmit="UpdateAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label>Username</label>
+                        <InputText class="input-control" @bind-Value="_editForm.Username" />
+                    </div>
+                    <div class="field-group">
+                        <label>Display Name</label>
+                        <InputText class="input-control" @bind-Value="_editForm.DisplayName" />
+                    </div>
+                    <div class="field-group">
+                        <label>Email</label>
+                        <InputText class="input-control" @bind-Value="_editForm.Email" />
+                    </div>
+                    <div class="field-group">
+                        <label>Role</label>
+                        <InputSelect class="input-control" @bind-Value="_editForm.Role">
+                            @foreach (var role in AppCatalogs.UserRoles)
+                            {
+                                <option value="@role">@role</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="field-group">
+                        <label>Department</label>
+                        <InputText class="input-control" @bind-Value="_editForm.Department" />
+                    </div>
+                    <label class="checkbox-row">
+                        <InputCheckbox @bind-Value="_editForm.IsActive" />
+                        <span>Active user</span>
+                    </label>
+                </div>
+
+                <div class="editor-actions">
+                    <button class="button button-primary" type="submit" disabled="@_isSaving">
+                        @(_isSaving ? "Saving..." : "Save Changes")
+                    </button>
+                    <button class="button button-danger" type="button" disabled="@_isDeleting" @onclick="DeleteAsync">
+                        @(_isDeleting ? "Deleting..." : "Delete")
+                    </button>
+                </div>
+            </EditForm>
+        }
+    </article>
+</section>
+
+@code {
+    private readonly List<UserResponse> _users = [];
+    private readonly List<string> _messages = [];
+    private UserCreateFormModel _createForm = UserCreateFormModel.CreateEmpty();
+    private UserEditFormModel _editForm = UserEditFormModel.CreateEmpty();
+    private UserResponse? _selectedUser;
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _isDeleting;
+    private string _search = string.Empty;
+    private string _messageClass = "message-panel message-panel-error";
+    private int _currentPage = 1;
+    private int _pageSize = 25;
+
+    private bool CanWrite => AppRoles.CanWriteUsers(AuthSessionService.CurrentSession?.User?.Role);
+
+    private string Search
+    {
+        get => _search;
+        set
+        {
+            if (_search == value)
+            {
+                return;
+            }
+
+            _search = value;
+            ResetPagination();
+        }
+    }
+
+    private List<UserResponse> FilteredUsers =>
+        _users
+            .Where(user =>
+                string.IsNullOrWhiteSpace(_search) ||
+                $"{user.DisplayName} {user.Username} {user.Email} {user.Role} {user.Department}"
+                    .Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(user => user.DisplayName)
+            .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadUsersAsync();
+
+    private async Task LoadUsersAsync(string? selectedId = null)
+    {
+        _isLoading = true;
+        _messages.Clear();
+
+        try
+        {
+            var users = await UserApiService.GetAllAsync();
+            _users.Clear();
+            _users.AddRange(users);
+
+            if (!string.IsNullOrWhiteSpace(selectedId))
+            {
+                var selected = _users.FirstOrDefault(user => user.Id == selectedId);
+                if (selected is not null)
+                {
+                    SelectUser(selected);
+                }
+            }
+            else if (_selectedUser is not null)
+            {
+                _selectedUser = _users.FirstOrDefault(user => user.Id == _selectedUser.Id);
+                if (_selectedUser is not null)
+                {
+                    _editForm = UserEditFormModel.FromResponse(_selectedUser);
+                }
+            }
+        }
+        catch (ApiException exception)
+        {
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            ClampCurrentPage();
+            _isLoading = false;
+        }
+    }
+
+    private void StartCreate()
+    {
+        _messages.Clear();
+        _selectedUser = null;
+        _createForm = UserCreateFormModel.CreateEmpty();
+    }
+
+    private void SelectUser(UserResponse user)
+    {
+        _messages.Clear();
+        _selectedUser = user;
+        _editForm = UserEditFormModel.FromResponse(user);
+    }
+
+    private async Task CreateAsync()
+    {
+        _messages.Clear();
+        _isSaving = true;
+
+        try
+        {
+            var createdUser = await UserApiService.CreateAsync(_createForm.ToRequest());
+            _messageClass = "message-panel message-panel-success";
+            _messages.Add("User created successfully.");
+            await LoadUsersAsync(createdUser.Id);
+        }
+        catch (ApiException exception)
+        {
+            _messageClass = "message-panel message-panel-error";
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task UpdateAsync()
+    {
+        if (_selectedUser is null)
+        {
+            return;
+        }
+
+        _messages.Clear();
+        _isSaving = true;
+
+        try
+        {
+            var updatedUser = await UserApiService.UpdateAsync(_selectedUser.Id, _editForm.ToRequest());
+            _messageClass = "message-panel message-panel-success";
+            _messages.Add("User updated successfully.");
+            await LoadUsersAsync(updatedUser.Id);
+        }
+        catch (ApiException exception)
+        {
+            _messageClass = "message-panel message-panel-error";
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedUser is null)
+        {
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Delete user '{_selectedUser.DisplayName}'?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _messages.Clear();
+        _isDeleting = true;
+
+        try
+        {
+            await UserApiService.DeleteAsync(_selectedUser.Id);
+            _messageClass = "message-panel message-panel-success";
+            _messages.Add("User deleted successfully.");
+            StartCreate();
+            await LoadUsersAsync();
+        }
+        catch (ApiException exception)
+        {
+            _messageClass = "message-panel message-panel-error";
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private string GetRowClass(string userId) =>
+        _selectedUser?.Id == userId ? "is-selected" : string.Empty;
+
+    private List<UserResponse> GetPagedUsers(IReadOnlyList<UserResponse> users) =>
+        users
+            .Skip((_currentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+
+    private void SetCurrentPage(int page)
+    {
+        _currentPage = page;
+        ClampCurrentPage();
+    }
+
+    private void SetPageSize(int pageSize)
+    {
+        _pageSize = pageSize;
+        ResetPagination();
+    }
+
+    private void ResetPagination() => _currentPage = 1;
+
+    private void ClampCurrentPage()
+    {
+        var totalPages = Math.Max(1, (int)Math.Ceiling(FilteredUsers.Count / (double)_pageSize));
+        _currentPage = Math.Clamp(_currentPage, 1, totalPages);
+    }
+
+    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("yyyy-MM-dd");
+}

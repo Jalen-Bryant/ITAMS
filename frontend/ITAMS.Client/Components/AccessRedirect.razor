@@ -1,0 +1,26 @@
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<div class="page-loading-shell">
+    <div class="loading-card">
+        <div class="loading-line"></div>
+        <p>Redirecting...</p>
+    </div>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var target = authenticationState.User.Identity?.IsAuthenticated == true
+            ? "/access-denied"
+            : "/login";
+
+        NavigationManager.NavigateTo(target, true);
+    }
+}

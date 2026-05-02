@@ -1,0 +1,120 @@
+@if (ShouldShowControls)
+{
+    <nav class="pagination-control" aria-label="Pagination">
+        <div class="pagination-summary">
+            <span>Showing @StartItem-@EndItem of @TotalItemCount</span>
+            <label class="pagination-page-size">
+                <span>Rows per page</span>
+                <select class="input-control input-control-small" value="@PageSize" @onchange="ChangePageSizeAsync">
+                    @foreach (var option in PageSizeOptions)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </select>
+            </label>
+        </div>
+
+        @if (TotalPages > 1)
+        {
+            <div class="pagination-pages">
+                <button class="pagination-button" type="button" disabled="@IsFirstPage" @onclick="GoToPreviousPageAsync">Previous</button>
+                @foreach (var pageNumber in VisiblePages)
+                {
+                    var targetPage = pageNumber;
+                    <button class="@GetPageButtonClass(pageNumber)" type="button" aria-current="@GetAriaCurrent(pageNumber)" @onclick="() => GoToPageAsync(targetPage)">
+                        @pageNumber
+                    </button>
+                }
+                <button class="pagination-button" type="button" disabled="@IsLastPage" @onclick="GoToNextPageAsync">Next</button>
+            </div>
+        }
+    </nav>
+}
+
+@code {
+    private static readonly int[] DefaultPageSizeOptions = [25, 50, 75, 100];
+
+    [Parameter]
+    public int TotalItemCount { get; set; }
+
+    [Parameter]
+    public int CurrentPage { get; set; } = 1;
+
+    [Parameter]
+    public EventCallback<int> CurrentPageChanged { get; set; }
+
+    [Parameter]
+    public int PageSize { get; set; } = 25;
+
+    [Parameter]
+    public EventCallback<int> PageSizeChanged { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<int> PageSizeOptions { get; set; } = DefaultPageSizeOptions;
+
+    private int ResolvedPageSize => PageSize > 0 ? PageSize : DefaultPageSizeOptions[0];
+
+    private int MinimumPageSize => PageSizeOptions.Count == 0
+        ? DefaultPageSizeOptions[0]
+        : PageSizeOptions.Min();
+
+    private bool ShouldShowControls => TotalItemCount > MinimumPageSize;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalItemCount / (double)ResolvedPageSize));
+
+    private int ClampedCurrentPage => Math.Clamp(CurrentPage, 1, TotalPages);
+
+    private int StartItem => TotalItemCount == 0
+        ? 0
+        : ((ClampedCurrentPage - 1) * ResolvedPageSize) + 1;
+
+    private int EndItem => Math.Min(ClampedCurrentPage * ResolvedPageSize, TotalItemCount);
+
+    private bool IsFirstPage => ClampedCurrentPage == 1;
+
+    private bool IsLastPage => ClampedCurrentPage == TotalPages;
+
+    private IEnumerable<int> VisiblePages
+    {
+        get
+        {
+            if (TotalPages <= 7)
+            {
+                return Enumerable.Range(1, TotalPages);
+            }
+
+            var startPage = Math.Max(1, ClampedCurrentPage - 2);
+            var endPage = Math.Min(TotalPages, startPage + 4);
+            startPage = Math.Max(1, endPage - 4);
+
+            return Enumerable.Range(startPage, endPage - startPage + 1);
+        }
+    }
+
+    private async Task ChangePageSizeAsync(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var pageSize) && pageSize > 0 && pageSize != PageSize)
+        {
+            await PageSizeChanged.InvokeAsync(pageSize);
+        }
+    }
+
+    private Task GoToPreviousPageAsync() => GoToPageAsync(ClampedCurrentPage - 1);
+
+    private Task GoToNextPageAsync() => GoToPageAsync(ClampedCurrentPage + 1);
+
+    private async Task GoToPageAsync(int page)
+    {
+        var clampedPage = Math.Clamp(page, 1, TotalPages);
+        if (clampedPage != CurrentPage)
+        {
+            await CurrentPageChanged.InvokeAsync(clampedPage);
+        }
+    }
+
+    private string GetPageButtonClass(int pageNumber) =>
+        pageNumber == ClampedCurrentPage ? "pagination-button is-active" : "pagination-button";
+
+    private string? GetAriaCurrent(int pageNumber) =>
+        pageNumber == ClampedCurrentPage ? "page" : null;
+}

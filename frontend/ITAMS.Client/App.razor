@@ -1,0 +1,34 @@
+@using ITAMS.Client.Components
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <AccessRedirect />
+                </NotAuthorized>
+                <Authorizing>
+                    <div class="page-loading-shell">
+                        <div class="loading-card">
+                            <div class="loading-line"></div>
+                            <p>Loading your session...</p>
+                        </div>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(Layout.PublicLayout)">
+                <section class="status-page">
+                    <div class="status-card">
+                        <p class="eyebrow">Missing Page</p>
+                        <h1>We could not find that route.</h1>
+                        <p>The page may have moved, or the address may be incorrect.</p>
+                        <a class="button button-primary" href="/">Go to ITAMS</a>
+                    </div>
+                </section>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

@@ -1,0 +1,56 @@
+@using System.Globalization
+
+@if (VisibleItems.Count == 0)
+{
+    <p class="empty-state">@EmptyText</p>
+}
+else
+{
+    <div class="bar-chart">
+        <div class="bar-chart__canvas">
+            <div class="bar-chart__axis-labels" aria-hidden="true">
+                <span>@CategoryLabel</span>
+                <span>@MetricLabel</span>
+            </div>
+
+            @foreach (var item in VisibleItems)
+            {
+                <div class="bar-chart__row">
+                    <div class="bar-chart__meta">
+                        <span>@item.Label</span>
+                        <strong>@item.Value.ToString("N0", CultureInfo.InvariantCulture)</strong>
+                    </div>
+                    <svg class="bar-chart__svg" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="@($"{item.Label} {MetricLabel}: {item.Value.ToString("N0", CultureInfo.InvariantCulture)}")">
+                        <rect class="bar-chart__track" x="0" y="1.5" width="100" height="7" rx="3.5" />
+                        <rect class="bar-chart__fill" x="0" y="1.5" width="@GetWidth(item.Value)" height="7" rx="3.5" />
+                    </svg>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<ReportsBreakdownItemResponse>? Items { get; set; }
+
+    [Parameter]
+    public string EmptyText { get; set; } = "No data is available for this chart.";
+
+    [Parameter]
+    public string CategoryLabel { get; set; } = "Category";
+
+    [Parameter]
+    public string MetricLabel { get; set; } = "Count";
+
+    private IReadOnlyList<ReportsBreakdownItemResponse> VisibleItems =>
+        Items?
+            .OrderByDescending(item => item.Value)
+            .ThenBy(item => item.Label, StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
+
+    private int MaxValue => Math.Max(1, VisibleItems.Max(item => item.Value));
+
+    private string GetWidth(int value) =>
+        (100d * value / MaxValue).ToString("0.##", CultureInfo.InvariantCulture);
+}

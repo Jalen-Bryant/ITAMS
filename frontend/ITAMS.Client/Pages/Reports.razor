@@ -1,0 +1,388 @@
+@page "/reports"
+@attribute [Authorize(Roles = "Admin,Manager,Auditor")]
+@inject NavigationManager NavigationManager
+@inject ReportsApiService ReportsApiService
+
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Analytics</p>
+        <h1>Reports</h1>
+        <p class="page-intro">Review aggregated inventory, user, and activity trends without leaving the operations workspace.</p>
+    </div>
+</section>
+
+<MessagePanel Messages="@_messages" CssClass="message-panel message-panel-error" />
+
+<section class="report-filter-card">
+    <div class="report-filter-card__header">
+        <div>
+            <p class="summary-label">Filters</p>
+            <h2>Reporting Scope</h2>
+        </div>
+        <p>Use presets for quick snapshots or switch to a custom range for deeper investigations.</p>
+    </div>
+
+    <div class="report-filter-presets" role="group" aria-label="Date range presets">
+        @foreach (var preset in ReportPresets.All)
+        {
+            <button class="@GetPresetButtonClass(preset)" type="button" @onclick="() => SelectPreset(preset)">
+                @GetPresetLabel(preset)
+            </button>
+        }
+    </div>
+
+    <div class="field-grid report-filter-grid">
+        <div class="field-group">
+            <label>Start Date</label>
+            <InputDate class="input-control" TValue="DateOnly?" @bind-Value="_filters.StartDate" disabled="@(!IsCustomPreset)" />
+        </div>
+        <div class="field-group">
+            <label>End Date</label>
+            <InputDate class="input-control" TValue="DateOnly?" @bind-Value="_filters.EndDate" disabled="@(!IsCustomPreset)" />
+        </div>
+        <div class="field-group">
+            <label>Asset Department</label>
+            <InputSelect class="input-control" @bind-Value="_filters.AssetDepartment">
+                <option value="">All asset departments</option>
+                @foreach (var department in _assetDepartments)
+                {
+                    <option value="@department">@department</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="field-group">
+            <label>User Department</label>
+            <InputSelect class="input-control" @bind-Value="_filters.UserDepartment">
+                <option value="">All user departments</option>
+                @foreach (var department in _userDepartments)
+                {
+                    <option value="@department">@department</option>
+                }
+            </InputSelect>
+        </div>
+    </div>
+
+    <div class="editor-actions">
+        <button class="button button-primary" type="button" disabled="@_isLoading" @onclick="ApplyFiltersAsync">
+            @(_isLoading ? "Refreshing..." : "Apply Filters")
+        </button>
+        <button class="button button-secondary" type="button" disabled="@_isLoading" @onclick="ClearFiltersAsync">Clear</button>
+    </div>
+
+    @if (_report is not null)
+    {
+        <div class="report-active-filters">
+            <span class="filter-pill">Window: @DescribeWindow(_report.Filters)</span>
+            <span class="filter-pill">Granularity: @DescribeGranularity(_report.Filters.TimeGranularity)</span>
+            <span class="filter-pill">Assets: @(string.IsNullOrWhiteSpace(_report.Filters.AssetDepartment) ? "All departments" : _report.Filters.AssetDepartment)</span>
+            <span class="filter-pill">Users: @(string.IsNullOrWhiteSpace(_report.Filters.UserDepartment) ? "All departments" : _report.Filters.UserDepartment)</span>
+        </div>
+    }
+</section>
+
+@if (_isLoading)
+{
+    <p class="empty-state">Loading report data...</p>
+}
+else if (_report is not null)
+{
+    <section class="report-section">
+        <div class="report-section__header">
+            <div>
+                <p class="summary-label">Overview</p>
+                <h2>Current Snapshot</h2>
+            </div>
+            <p>Current totals honor department filters, while the warranty callout reflects the selected time window.</p>
+        </div>
+
+        <div class="report-kpi-grid">
+            <article class="report-kpi-card">
+                <p class="summary-label">Assets</p>
+                <h3>@FormatNumber(_report.Kpis.TotalAssets)</h3>
+                <p>Inventory records in the current asset scope.</p>
+            </article>
+            <article class="report-kpi-card">
+                <p class="summary-label">Open Assignments</p>
+                <h3>@FormatNumber(_report.Kpis.OpenAssignments)</h3>
+                <p>Assets that still carry an active assignment.</p>
+            </article>
+            <article class="report-kpi-card">
+                <p class="summary-label">Users</p>
+                <h3>@FormatNumber(_report.Kpis.TotalUsers)</h3>
+                <p>Directory records in the current user scope.</p>
+            </article>
+            <article class="report-kpi-card">
+                <p class="summary-label">Warranty Window</p>
+                <h3>@FormatNumber(_report.Kpis.WarrantiesExpiringSoon)</h3>
+                <p>Filtered assets with warranty end dates inside the selected range.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="report-section">
+        <div class="report-section__header">
+            <div>
+                <p class="summary-label">Inventory</p>
+                <h2>Asset Mix</h2>
+            </div>
+            <p>Inventory charts respond to the asset department filter.</p>
+        </div>
+
+        <div class="report-chart-grid report-chart-grid-inventory">
+            <article class="report-chart-card">
+                <div class="report-chart-card__header">
+                    <div>
+                        <p class="summary-label">Status</p>
+                        <h3>Assets By Status</h3>
+                    </div>
+                    <p>Current inventory posture across the selected asset scope.</p>
+                </div>
+                <BarChart Items="@_report.AssetsByStatus" EmptyText="No assets matched the current inventory filters." CategoryLabel="Status" MetricLabel="Count" />
+            </article>
+
+            <article class="report-chart-card">
+                <div class="report-chart-card__header">
+                    <div>
+                        <p class="summary-label">Category</p>
+                        <h3>Assets By Type</h3>
+                    </div>
+                    <p>See which hardware categories dominate the filtered inventory.</p>
+                </div>
+                <BarChart Items="@_report.AssetsByType" EmptyText="No assets matched the current inventory filters." CategoryLabel="Type" MetricLabel="Count" />
+            </article>
+
+            <article class="report-chart-card">
+                <div class="report-chart-card__header">
+                    <div>
+                        <p class="summary-label">Warranty</p>
+                        <h3>Warranty Expirations Over Time</h3>
+                    </div>
+                    <p>Expiration volume inside the active reporting window.</p>
+                </div>
+                <LineChart Points="@_report.WarrantyExpirationsOverTime" EmptyText="No warranty expirations were found in the selected period." AriaLabel="Warranty expiration trend" YAxisLabel="Count" />
+            </article>
+        </div>
+    </section>
+
+    <section class="report-section">
+        <div class="report-section__header">
+            <div>
+                <p class="summary-label">People</p>
+                <h2>User Distribution</h2>
+            </div>
+            <p>User charts respond only to the user department filter, so staffing comparisons stay independent from asset scope.</p>
+        </div>
+
+        <div class="report-chart-grid">
+            <article class="report-chart-card">
+                <div class="report-chart-card__header">
+                    <div>
+                        <p class="summary-label">Role</p>
+                        <h3>Users By Role</h3>
+                    </div>
+                    <p>Review staffing balance across the current user slice.</p>
+                </div>
+                <BarChart Items="@_report.UsersByRole" EmptyText="No users matched the current directory filters." CategoryLabel="Role" MetricLabel="Count" />
+            </article>
+
+            <article class="report-chart-card">
+                <div class="report-chart-card__header">
+                    <div>
+                        <p class="summary-label">Department</p>
+                        <h3>Users By Department</h3>
+                    </div>
+                    <p>Spot how the current people dataset is distributed across departments.</p>
+                </div>
+                <BarChart Items="@_report.UsersByDepartment" EmptyText="No users matched the current directory filters." CategoryLabel="Department" MetricLabel="Count" />
+            </article>
+        </div>
+    </section>
+
+    <section class="report-section">
+        <div class="report-section__header">
+            <div>
+                <p class="summary-label">Trends</p>
+                <h2>Operational Activity</h2>
+            </div>
+            <p>Assignment and lifecycle charts use the reporting window plus the active asset department filter.</p>
+        </div>
+
+        <div class="report-trend-grid">
+            <article class="report-chart-card">
+                <div class="report-chart-card__header">
+                    <div>
+                        <p class="summary-label">Allocation</p>
+                        <h3>Assignments Over Time</h3>
+                    </div>
+                    <p>Assignment starts grouped by the current time granularity.</p>
+                </div>
+                <LineChart Points="@_report.AssignmentsOverTime" EmptyText="No assignments started during the selected period." AriaLabel="Assignment trend" YAxisLabel="Count" />
+            </article>
+
+            <article class="report-chart-card">
+                <div class="report-chart-card__header">
+                    <div>
+                        <p class="summary-label">Lifecycle</p>
+                        <h3>Lifecycle Activity Over Time</h3>
+                    </div>
+                    <p>Operational lifecycle events that landed within the active report window.</p>
+                </div>
+                <LineChart Points="@_report.LifecycleActivityOverTime" EmptyText="No lifecycle activity was found during the selected period." AriaLabel="Lifecycle activity trend" YAxisLabel="Count" />
+            </article>
+        </div>
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "preset")]
+    public string? PresetQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "startDate")]
+    public string? StartDateQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "endDate")]
+    public string? EndDateQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "assetDepartment")]
+    public string? AssetDepartmentQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "userDepartment")]
+    public string? UserDepartmentQuery { get; set; }
+
+    private readonly List<string> _messages = [];
+    private IReadOnlyList<string> _assetDepartments = [];
+    private IReadOnlyList<string> _userDepartments = [];
+    private ReportsFilterFormModel _filters = ReportsFilterFormModel.CreateDefault();
+    private ReportsOverviewResponse? _report;
+    private bool _isLoading;
+
+    private bool IsCustomPreset => string.Equals(_filters.Preset, ReportPresets.Custom, StringComparison.Ordinal);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _filters = ReportsFilterFormModel.FromQuery(
+            PresetQuery,
+            StartDateQuery,
+            EndDateQuery,
+            AssetDepartmentQuery,
+            UserDepartmentQuery);
+
+        await LoadReportAsync(new ReportsOverviewQuery
+        {
+            Preset = PresetQuery,
+            StartDate = StartDateQuery,
+            EndDate = EndDateQuery,
+            AssetDepartment = AssetDepartmentQuery,
+            UserDepartment = UserDepartmentQuery
+        });
+    }
+
+    private async Task LoadReportAsync(ReportsOverviewQuery query)
+    {
+        _isLoading = true;
+        _messages.Clear();
+
+        try
+        {
+            _report = await ReportsApiService.GetOverviewAsync(query);
+            _assetDepartments = _report.AvailableFilters.AssetDepartments;
+            _userDepartments = _report.AvailableFilters.UserDepartments;
+            _filters = ReportsFilterFormModel.FromResponse(_report.Filters);
+        }
+        catch (ApiException exception)
+        {
+            _report = null;
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _messages.Clear();
+
+        if (IsCustomPreset)
+        {
+            if (_filters.StartDate is null || _filters.EndDate is null)
+            {
+                _messages.Add("Select both a start date and an end date for a custom reporting window.");
+                return;
+            }
+
+            if (_filters.EndDate < _filters.StartDate)
+            {
+                _messages.Add("The custom end date must be on or after the start date.");
+                return;
+            }
+        }
+
+        NavigationManager.NavigateTo(BuildReportsUri(_filters.ToQuery()));
+        await Task.CompletedTask;
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        NavigationManager.NavigateTo("/reports");
+        await Task.CompletedTask;
+    }
+
+    private void SelectPreset(string preset)
+    {
+        _filters.Preset = preset;
+        if (!string.Equals(preset, ReportPresets.Custom, StringComparison.Ordinal))
+        {
+            _filters.StartDate = null;
+            _filters.EndDate = null;
+        }
+    }
+
+    private static string GetPresetLabel(string preset) =>
+        preset switch
+        {
+            ReportPresets.Last30Days => "30D",
+            ReportPresets.Last90Days => "90D",
+            ReportPresets.Last12Months => "12M",
+            _ => "Custom"
+        };
+
+    private string GetPresetButtonClass(string preset) =>
+        string.Equals(_filters.Preset, preset, StringComparison.Ordinal)
+            ? "segment-button is-active"
+            : "segment-button";
+
+    private static string BuildReportsUri(ReportsOverviewQuery query)
+    {
+        var parameters = new List<string>();
+
+        AppendQueryParameter(parameters, "preset", query.Preset);
+        AppendQueryParameter(parameters, "startDate", query.StartDate);
+        AppendQueryParameter(parameters, "endDate", query.EndDate);
+        AppendQueryParameter(parameters, "assetDepartment", query.AssetDepartment);
+        AppendQueryParameter(parameters, "userDepartment", query.UserDepartment);
+
+        return parameters.Count == 0
+            ? "/reports"
+            : $"/reports?{string.Join("&", parameters)}";
+    }
+
+    private static void AppendQueryParameter(List<string> parameters, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        parameters.Add($"{Uri.EscapeDataString(key)}={Uri.EscapeDataString(value.Trim())}");
+    }
+
+    private static string FormatNumber(int value) => value.ToString("N0");
+
+    private static string DescribeWindow(ReportsFilterStateResponse filters) =>
+        $"{filters.StartDate:yyyy-MM-dd} to {filters.EndDate:yyyy-MM-dd}";
+
+    private static string DescribeGranularity(string value) =>
+        string.Equals(value, "month", StringComparison.OrdinalIgnoreCase) ? "Monthly" : "Daily";
+}

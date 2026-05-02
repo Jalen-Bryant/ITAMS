@@ -1,0 +1,29 @@
+@if (VisibleMessages.Count > 0)
+{
+    <div class="@CssClass">
+        @if (!string.IsNullOrWhiteSpace(Title))
+        {
+            <p class="message-panel-title">@Title</p>
+        }
+
+        <ul>
+            @foreach (var message in VisibleMessages)
+            {
+                <li>@message</li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public IReadOnlyList<string>? Messages { get; set; }
+
+    [Parameter]
+    public string CssClass { get; set; } = "message-panel message-panel-error";
+
+    private IReadOnlyList<string> VisibleMessages => Messages ?? Array.Empty<string>();
+}

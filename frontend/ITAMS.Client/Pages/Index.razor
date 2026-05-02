@@ -1,0 +1,26 @@
+@page "/"
+@layout PublicLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<div class="page-loading-shell">
+    <div class="loading-card">
+        <div class="loading-line"></div>
+        <p>Preparing your workspace...</p>
+    </div>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        NavigationManager.NavigateTo(
+            authenticationState.User.Identity?.IsAuthenticated == true ? "/home" : "/login",
+            true);
+    }
+}
