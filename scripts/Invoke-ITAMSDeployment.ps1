@@ -226,23 +226,30 @@ function Test-LiveSite {
         throw "The live appsettings.json does not point at the expected API URL."
     }
 
+    $deadline = [DateTime]::UtcNow.AddSeconds(90)
     $apiStatusCode = $null
-    try {
-        $apiResponse = Invoke-WebRequest -Uri "$PublicUrl/api/auth/me" -UseBasicParsing -TimeoutSec 60
-        $apiStatusCode = [int]$apiResponse.StatusCode
-    }
-    catch {
-        if ($_.Exception.Response) {
-            $apiStatusCode = [int]$_.Exception.Response.StatusCode
+    do {
+        try {
+            $apiResponse = Invoke-WebRequest -Uri "$PublicUrl/api/auth/me" -UseBasicParsing -TimeoutSec 30
+            $apiStatusCode = [int]$apiResponse.StatusCode
         }
-        else {
-            throw
+        catch {
+            if ($_.Exception.Response) {
+                $apiStatusCode = [int]$_.Exception.Response.StatusCode
+            }
+            else {
+                $apiStatusCode = $null
+            }
         }
-    }
 
-    if ($apiStatusCode -ne 401) {
-        throw "Expected /api/auth/me to return 401 from the API, but received $apiStatusCode."
-    }
+        if ($apiStatusCode -eq 401) {
+            return
+        }
+
+        Start-Sleep -Seconds 3
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    throw "Expected /api/auth/me to return 401 from the API, but received $apiStatusCode."
 }
 
 function Remove-OldReleases {
