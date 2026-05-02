@@ -74,9 +74,9 @@ function Add-ApiRewriteExclusion {
     )
 
     [xml]$config = Get-Content -Raw -LiteralPath $WebConfigPath
-    $rules = $config.configuration.'system.webServer'.rewrite.rules.rule
+    $rules = $config.SelectNodes("/configuration/system.webServer/rewrite/rules/rule")
     foreach ($rule in $rules) {
-        $conditions = $rule.conditions
+        $conditions = $rule.SelectSingleNode("conditions")
         if ($null -eq $conditions) {
             $conditions = $config.CreateElement("conditions")
             $conditions.SetAttribute("logicalGrouping", "MatchAll")
@@ -87,10 +87,10 @@ function Add-ApiRewriteExclusion {
         }
 
         $hasApiExclusion = $false
-        foreach ($condition in @($conditions.add)) {
-            if ($condition.input -eq "{URL}" -and
-                $condition.pattern -eq "^/api(?:/|$)" -and
-                $condition.negate -eq "true") {
+        foreach ($condition in @($conditions.SelectNodes("add"))) {
+            if ($condition.GetAttribute("input") -eq "{URL}" -and
+                $condition.GetAttribute("pattern") -eq "^/api(?:/|$)" -and
+                $condition.GetAttribute("negate") -eq "true") {
                 $hasApiExclusion = $true
             }
         }
@@ -126,16 +126,20 @@ function Set-ApiEnvironmentVariables {
     }
 
     [xml]$config = Get-Content -Raw -LiteralPath $WebConfigPath
-    $aspNetCore = $config.configuration.location.'system.webServer'.aspNetCore
-    $environmentVariables = $aspNetCore.environmentVariables
+    $aspNetCore = $config.SelectSingleNode("/configuration/location/system.webServer/aspNetCore")
+    if ($null -eq $aspNetCore) {
+        throw "API web.config does not contain an aspNetCore node."
+    }
+
+    $environmentVariables = $aspNetCore.SelectSingleNode("environmentVariables")
     if ($null -eq $environmentVariables) {
         $environmentVariables = $config.CreateElement("environmentVariables")
         [void]$aspNetCore.AppendChild($environmentVariables)
     }
 
     foreach ($property in $secrets.PSObject.Properties) {
-        $existing = @($environmentVariables.environmentVariable) |
-            Where-Object { $_.name -eq $property.Name } |
+        $existing = @($environmentVariables.SelectNodes("environmentVariable")) |
+            Where-Object { $_.GetAttribute("name") -eq $property.Name } |
             Select-Object -First 1
 
         if ($existing) {
@@ -183,9 +187,9 @@ function Test-ReleaseArtifacts {
 
     $apiWebConfigPath = Join-Path $ApiPath "web.config"
     [xml]$apiConfig = Get-Content -Raw -LiteralPath $apiWebConfigPath
-    $envVars = @($apiConfig.configuration.location.'system.webServer'.aspNetCore.environmentVariables.environmentVariable)
+    $envVars = @($apiConfig.SelectNodes("/configuration/location/system.webServer/aspNetCore/environmentVariables/environmentVariable"))
     foreach ($requiredName in @("ASPNETCORE_ENVIRONMENT", "MongoDb__ConnectionString", "Jwt__SigningKey", "Cors__AllowedOrigins__0")) {
-        if (-not ($envVars | Where-Object { $_.name -eq $requiredName -and -not [string]::IsNullOrWhiteSpace($_.value) })) {
+        if (-not ($envVars | Where-Object { $_.GetAttribute("name") -eq $requiredName -and -not [string]::IsNullOrWhiteSpace($_.GetAttribute("value")) })) {
             throw "Published API web.config is missing environment variable $requiredName."
         }
     }
