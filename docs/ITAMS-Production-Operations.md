@@ -4,6 +4,26 @@ This guide documents the current production ITAMS server, deployment flow, and
 recurring admin tasks. It intentionally includes hostnames, paths, and
 thumbprints, but it must not include secret values.
 
+## Table Of Contents
+
+- [Production Topology](#production-topology)
+- [Domain, DNS, And Certificate](#domain-dns-and-certificate)
+- [IIS Runtime Settings](#iis-runtime-settings)
+- [Production Configuration](#production-configuration)
+- [Git Remote And Auto-Deploy](#git-remote-and-auto-deploy)
+- [Deployment Smoke Tests](#deployment-smoke-tests)
+- [Rollback](#rollback)
+- [Reboot Validation](#reboot-validation)
+- [Add SSH Access For A Developer](#add-ssh-access-for-a-developer)
+- [Rotate Production Secrets](#rotate-production-secrets)
+- [Renew Or Replace The SSL Certificate](#renew-or-replace-the-ssl-certificate)
+- [Troubleshooting](#troubleshooting)
+  - [Site Loads But Stays On The Launch Screen](#site-loads-but-stays-on-the-launch-screen)
+  - [API Route Returns Blazor HTML](#api-route-returns-blazor-html)
+  - [API Fails After Deployment](#api-fails-after-deployment)
+  - [Push To Main Failed](#push-to-main-failed)
+  - [DNS Or Certificate Problems](#dns-or-certificate-problems)
+
 ## Production Topology
 
 | Item | Value |
@@ -149,6 +169,21 @@ git clone jalen@20.120.240.89:C:/Git/ITAMS.git
 
 The server-side `post-receive` hook deploys only `refs/heads/main`. Other
 branches are accepted for version control and do not deploy.
+
+The source checkout at `C:\ITAMS\ITAMS` is not the live site. A local commit in
+that checkout only updates Git history; it does not publish files under IIS.
+After committing on the production server, push the commit into the bare repo so
+the normal deployment hook runs:
+
+```powershell
+git -C C:\ITAMS\ITAMS status --short
+git -C C:\ITAMS\ITAMS log --oneline -1
+git -C C:\ITAMS\ITAMS push C:/Git/ITAMS.git main
+```
+
+From a normal developer workstation, push to `origin main` instead. Do not copy
+files directly into `C:\inetpub\ITAMS\releases`; that bypasses validation,
+release tracking, app-pool recycling, and smoke tests.
 
 On a successful push to `main`, the hook:
 

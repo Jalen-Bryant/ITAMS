@@ -4,6 +4,20 @@ ITAMS is an IT asset management application for tracking hardware inventory,
 asset assignments, user access, reporting, and history. The production app is
 hosted at `https://itams.app/`.
 
+## Table Of Contents
+
+- [What The App Manages](#what-the-app-manages)
+- [Main Pages](#main-pages)
+- [Roles And Permissions](#roles-and-permissions)
+- [Authentication And Sessions](#authentication-and-sessions)
+- [Common Workflows](#common-workflows)
+  - [Add Or Update An Asset](#add-or-update-an-asset)
+  - [Assign An Asset](#assign-an-asset)
+  - [Manage Users](#manage-users)
+  - [Review Reports](#review-reports)
+  - [Review History](#review-history)
+- [Support Checks](#support-checks)
+
 ## What The App Manages
 
 ITAMS is organized around these operational records:

@@ -3,6 +3,13 @@
 This folder contains source-controlled documentation for ITAMS, the IT Asset
 Management System hosted at `https://itams.app/`.
 
+## Table Of Contents
+
+- [Documentation Map](#documentation-map)
+- [Production Quick Facts](#production-quick-facts)
+- [Security Notes](#security-notes)
+- [Common Validation Checks](#common-validation-checks)
+
 ## Documentation Map
 
 | Document | Audience | Purpose |

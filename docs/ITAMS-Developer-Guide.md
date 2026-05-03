@@ -4,6 +4,23 @@ This guide explains how to work on ITAMS locally and how the app is structured.
 Production operations and deployment are covered in
 [ITAMS Production Operations](./ITAMS-Production-Operations.md).
 
+## Table Of Contents
+
+- [Repository Layout](#repository-layout)
+- [Local Prerequisites](#local-prerequisites)
+- [Local Configuration](#local-configuration)
+- [Build, Test, And Run](#build-test-and-run)
+- [API Surface](#api-surface)
+- [Frontend Notes](#frontend-notes)
+- [Development Workflow](#development-workflow)
+- [Troubleshooting](#troubleshooting)
+  - [MongoDB Connection Failures](#mongodb-connection-failures)
+  - [JWT Configuration Errors](#jwt-configuration-errors)
+  - [CORS Failures](#cors-failures)
+  - [Login Or Stale Session Problems](#login-or-stale-session-problems)
+  - [Bootstrap Admin Was Not Created](#bootstrap-admin-was-not-created)
+  - [Ports Already In Use](#ports-already-in-use)
+
 ## Repository Layout
 
 | Path | Purpose |
@@ -156,8 +173,26 @@ key, token lifetime, role claims, and backing session activity.
    ```
 
 3. Restore, build, and test locally.
-4. Commit and push the branch.
-5. Merge or push to `main` only when ready to deploy.
+4. Review and commit only the intended files:
+
+   ```powershell
+   git status --short
+   git diff -- <PATH_TO_REVIEW>
+   git add -- <PATH_TO_COMMIT>
+   git commit -m "Describe the change"
+   ```
+
+   Use path-specific `git add -- <PATH>` commands so unrelated local edits do
+   not get included by accident.
+5. Push the branch:
+
+   ```powershell
+   git push origin feature/my-change
+   ```
+
+   A local commit is only recorded in the current checkout. It is not available
+   to other machines and does not deploy until it is pushed.
+6. Merge or push to `main` only when ready to deploy.
 
 Pushes to `main` run the production deployment hook. See
 [ITAMS Git Deployment](./ITAMS-Git-Deployment.md) and

@@ -2,6 +2,22 @@ ITAMS Cross-Machine Setup Runbook
 
 Generated on 2026-03-22 18:43:48
 
+Table of Contents
+
+- Overview
+- Software and Access Dependencies
+- Repository Structure
+- Required Configuration
+- Setup and Startup Steps
+- Validation and Smoke Test
+- Troubleshooting
+  - MongoDB Connection Failures
+  - HTTPS Certificate Problems
+  - Ports Already in Use
+  - Login or Stale Session Problems
+  - Bootstrap Admin Not Created
+- Operational Notes
+
 Overview
 
 This runbook explains how to restore, configure, and run the current ITAMS solution on another Windows computer. The solution contains an ASP.NET Core API, a Blazor WebAssembly frontend, and an API test project.
