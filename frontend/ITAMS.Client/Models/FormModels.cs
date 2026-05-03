@@ -293,6 +293,26 @@ public sealed class UserEditFormModel
         };
 }
 
+public sealed class UserPasswordResetFormModel
+{
+    [Required]
+    [StringLength(128, MinimumLength = 12)]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(128, MinimumLength = 12)]
+    [Compare(nameof(NewPassword), ErrorMessage = "The new password and verification password must match.")]
+    public string VerifyPassword { get; set; } = string.Empty;
+
+    public ResetUserPasswordRequest ToRequest() =>
+        new()
+        {
+            NewPassword = NewPassword
+        };
+
+    public static UserPasswordResetFormModel CreateEmpty() => new();
+}
+
 public sealed class ReportsFilterFormModel
 {
     public string Preset { get; set; } = ReportPresets.Last12Months;

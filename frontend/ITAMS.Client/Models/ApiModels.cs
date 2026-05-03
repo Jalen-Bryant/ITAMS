@@ -223,6 +223,11 @@ public sealed class UpdateUserRequest
     public bool? IsActive { get; set; }
 }
 
+public sealed class ResetUserPasswordRequest
+{
+    public string? NewPassword { get; set; }
+}
+
 public sealed class UserResponse
 {
     public string Id { get; set; } = string.Empty;

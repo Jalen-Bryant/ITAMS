@@ -32,6 +32,10 @@ public static class UserEndpoints
             .WithName("UpdateUser")
             .RequireAuthorization(AuthorizationPolicies.UserWrite);
 
+        group.MapPost("/{id}/password", ResetUserPasswordAsync)
+            .WithName("ResetUserPassword")
+            .RequireAuthorization(AuthorizationPolicies.UserWrite);
+
         group.MapDelete("/{id}", DeleteUserAsync)
             .WithName("DeleteUser")
             .RequireAuthorization(AuthorizationPolicies.UserWrite);
@@ -215,6 +219,54 @@ public static class UserEndpoints
                 message = UsersService.GetDuplicateKeyMessage(exception)
             });
         }
+    }
+
+    private static async Task<IResult> ResetUserPasswordAsync(
+        string id,
+        ResetUserPasswordRequest request,
+        ClaimsPrincipal principal,
+        HttpContext httpContext,
+        CurrentUserService currentUserService,
+        OperationContextService operationContextService,
+        AuthService authService,
+        CancellationToken cancellationToken)
+    {
+        if (!TryParseUserId(id, out var userId, out var validationResult))
+        {
+            return validationResult;
+        }
+
+        var validationErrors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        RequestValidation.AddPasswordError(validationErrors, "newPassword", request.NewPassword);
+        if (validationErrors.Count > 0)
+        {
+            return Results.ValidationProblem(validationErrors);
+        }
+
+        if (!currentUserService.TryGetUserId(principal, out var actorUserId, out _))
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await authService.ResetUserPasswordAsync(
+            actorUserId,
+            userId,
+            request.NewPassword!,
+            operationContextService.GetClientIp(httpContext),
+            operationContextService.GetUserAgent(httpContext),
+            cancellationToken);
+
+        if (result.NotFound)
+        {
+            return Results.NotFound();
+        }
+
+        if (!result.Success)
+        {
+            return Results.BadRequest(new { message = result.Error ?? "The password could not be updated." });
+        }
+
+        return Results.NoContent();
     }
 
     private static async Task<IResult> DeleteUserAsync(

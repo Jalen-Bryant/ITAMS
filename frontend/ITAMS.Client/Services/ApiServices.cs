@@ -237,6 +237,12 @@ public sealed class UserApiService(AuthorizedApiClient apiClient)
         return await ApiResponseHelper.ReadAsync<UserResponse>(response, cancellationToken);
     }
 
+    public async Task ResetPasswordAsync(string id, ResetUserPasswordRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await apiClient.Client.PostAsJsonAsync($"users/{id}/password", request, ApiResponseHelper.JsonOptions, cancellationToken);
+        await ApiResponseHelper.EnsureSuccessAsync(response, cancellationToken);
+    }
+
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
         using var response = await apiClient.Client.DeleteAsync($"users/{id}", cancellationToken);

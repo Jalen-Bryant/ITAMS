@@ -395,6 +395,84 @@ public sealed class AuthService
         return new PasswordChangeResult { Success = true };
     }
 
+    public async Task<PasswordChangeResult> ResetUserPasswordAsync(
+        ObjectId actorUserId,
+        ObjectId targetUserId,
+        string newPassword,
+        string ip,
+        string userAgent,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _usersCollection
+            .Find(existingUser => existingUser.Id == targetUserId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (user is null)
+        {
+            return new PasswordChangeResult { NotFound = true };
+        }
+
+        var now = DateTime.UtcNow;
+        var updatedUser = new UserDocument
+        {
+            Id = user.Id,
+            Username = user.Username,
+            DisplayName = user.DisplayName,
+            Email = user.Email,
+            NormalizedUsername = user.NormalizedUsername,
+            NormalizedEmail = user.NormalizedEmail,
+            PasswordHash = _passwordHasher.HashPassword(user, newPassword),
+            PasswordChangedAt = now,
+            FailedLoginCount = 0,
+            FailedLoginWindowStartedAt = null,
+            LastFailedLoginAt = null,
+            LockoutEndAt = null,
+            Role = user.Role,
+            Department = user.Department,
+            IsActive = user.IsActive,
+            CreatedAt = user.CreatedAt,
+            UpdatedAt = now
+        };
+
+        using var session = await _mongoClient.StartSessionAsync(cancellationToken: cancellationToken);
+        session.StartTransaction();
+
+        var replaceResult = await _usersCollection.ReplaceOneAsync(
+            session,
+            existingUser => existingUser.Id == targetUserId,
+            updatedUser,
+            cancellationToken: cancellationToken);
+        if (replaceResult.MatchedCount == 0)
+        {
+            await session.AbortTransactionAsync(cancellationToken);
+            return new PasswordChangeResult { NotFound = true };
+        }
+
+        var revokeUpdate = Builders<UserSessionDocument>.Update
+            .Set(existing => existing.RevokedAt, now)
+            .Set(existing => existing.ExpiresAt, now);
+
+        await _sessionsCollection.UpdateManyAsync(
+            session,
+            existing => existing.UserId == targetUserId && existing.RevokedAt == null,
+            revokeUpdate,
+            cancellationToken: cancellationToken);
+
+        await _auditLogsCollection.InsertOneAsync(
+            session,
+            MutationDocumentFactory.CreateAuditLog(
+                "UPDATE",
+                actorUserId,
+                targetUserId,
+                "User",
+                $"User {user.Username} password reset by an administrator via API.",
+                ip,
+                userAgent),
+            cancellationToken: cancellationToken);
+
+        await session.CommitTransactionAsync(cancellationToken);
+        return new PasswordChangeResult { Success = true };
+    }
+
     private static bool IsLockedOut(UserDocument user, DateTime nowUtc) =>
         user.LockoutEndAt is not null &&
         EnsureUtc(user.LockoutEndAt.Value) > nowUtc;

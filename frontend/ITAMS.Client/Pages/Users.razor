@@ -209,6 +209,35 @@
                     </button>
                 </div>
             </EditForm>
+
+            <section class="editor-section">
+                <div class="editor-section__header">
+                    <p class="summary-label">Security</p>
+                    <h3>Change Password</h3>
+                </div>
+
+                <EditForm Model="@_passwordForm" OnValidSubmit="ResetPasswordAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="field-grid">
+                        <div class="field-group">
+                            <label>New Password</label>
+                            <InputText class="input-control" type="password" @bind-Value="_passwordForm.NewPassword" />
+                        </div>
+                        <div class="field-group">
+                            <label>Verify Password</label>
+                            <InputText class="input-control" type="password" @bind-Value="_passwordForm.VerifyPassword" />
+                        </div>
+                    </div>
+
+                    <div class="editor-actions">
+                        <button class="button button-secondary" type="submit" disabled="@_isResettingPassword">
+                            @(_isResettingPassword ? "Updating..." : "Update Password")
+                        </button>
+                    </div>
+                </EditForm>
+            </section>
         }
     </article>
 </section>
@@ -218,10 +247,12 @@
     private readonly List<string> _messages = [];
     private UserCreateFormModel _createForm = UserCreateFormModel.CreateEmpty();
     private UserEditFormModel _editForm = UserEditFormModel.CreateEmpty();
+    private UserPasswordResetFormModel _passwordForm = UserPasswordResetFormModel.CreateEmpty();
     private UserResponse? _selectedUser;
     private bool _isLoading = true;
     private bool _isSaving;
     private bool _isDeleting;
+    private bool _isResettingPassword;
     private string _search = string.Empty;
     private string _messageClass = "message-panel message-panel-error";
     private int _currentPage = 1;
@@ -299,6 +330,7 @@
         _messages.Clear();
         _selectedUser = null;
         _createForm = UserCreateFormModel.CreateEmpty();
+        _passwordForm = UserPasswordResetFormModel.CreateEmpty();
     }
 
     private void SelectUser(UserResponse user)
@@ -306,6 +338,7 @@
         _messages.Clear();
         _selectedUser = user;
         _editForm = UserEditFormModel.FromResponse(user);
+        _passwordForm = UserPasswordResetFormModel.CreateEmpty();
     }
 
     private async Task CreateAsync()
@@ -356,6 +389,34 @@
         finally
         {
             _isSaving = false;
+        }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (_selectedUser is null)
+        {
+            return;
+        }
+
+        _messages.Clear();
+        _isResettingPassword = true;
+
+        try
+        {
+            await UserApiService.ResetPasswordAsync(_selectedUser.Id, _passwordForm.ToRequest());
+            _messageClass = "message-panel message-panel-success";
+            _messages.Add("Password updated successfully.");
+            _passwordForm = UserPasswordResetFormModel.CreateEmpty();
+        }
+        catch (ApiException exception)
+        {
+            _messageClass = "message-panel message-panel-error";
+            _messages.AddRange(exception.GetMessages());
+        }
+        finally
+        {
+            _isResettingPassword = false;
         }
     }
 

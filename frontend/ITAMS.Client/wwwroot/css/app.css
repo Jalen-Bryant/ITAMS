@@ -1100,6 +1100,23 @@ select.input-control optgroup {
     padding-top: 1rem;
 }
 
+.editor-section {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.35rem;
+    padding-top: 1.35rem;
+    border-top: 1px solid var(--surface-border-subtle);
+}
+
+.editor-section__header {
+    display: grid;
+    gap: 0.15rem;
+}
+
+.editor-section__header h3 {
+    font-size: 1.15rem;
+}
+
 .detail-panel,
 .detail-list {
     display: grid;

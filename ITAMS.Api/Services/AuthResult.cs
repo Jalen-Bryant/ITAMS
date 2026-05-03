@@ -24,4 +24,6 @@ public sealed class PasswordChangeResult
     public bool Success { get; init; }
 
     public string? Error { get; init; }
+
+    public bool NotFound { get; init; }
 }

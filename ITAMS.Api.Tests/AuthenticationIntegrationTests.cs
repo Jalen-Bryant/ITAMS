@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using ITAMS.Api.Contracts;
 using ITAMS.Api.Tests.TestInfrastructure;
+using MongoDB.Bson;
 using Xunit;
 
 namespace ITAMS.Api.Tests;
@@ -118,5 +119,62 @@ public sealed class AuthenticationIntegrationTests(ApiIntegrationTestFixture fix
         });
 
         Assert.Equal(HttpStatusCode.OK, newPasswordResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCanResetUserPassword_And_TargetSessionsAreRevoked()
+    {
+        var adminLogin = await LoginAsBootstrapAdminAsync();
+        using var adminClient = CreateAuthenticatedClient(adminLogin.AccessToken);
+
+        var createdUser = await CreateUserAsync(adminClient, "User", "OriginalResetPass123!");
+        var technician = await CreateUserAsync(adminClient, "Technician", "TechnicianResetPass123!");
+        var userLogin = await LoginAsync(createdUser.Username, "OriginalResetPass123!");
+        var technicianLogin = await LoginAsync(technician.Username, "TechnicianResetPass123!");
+
+        using var technicianClient = CreateAuthenticatedClient(technicianLogin.AccessToken);
+        var forbiddenResetResponse = await technicianClient.PostAsJsonAsync(
+            $"/users/{createdUser.Id}/password",
+            new ResetUserPasswordRequest
+            {
+                NewPassword = "BlockedResetPass123!"
+            });
+
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenResetResponse.StatusCode);
+
+        using var userClient = CreateAuthenticatedClient(userLogin.AccessToken);
+        var resetPasswordResponse = await adminClient.PostAsJsonAsync(
+            $"/users/{createdUser.Id}/password",
+            new ResetUserPasswordRequest
+            {
+                NewPassword = "UpdatedResetPass123!"
+            });
+
+        Assert.Equal(HttpStatusCode.NoContent, resetPasswordResponse.StatusCode);
+
+        var meResponseWithOldToken = await userClient.GetAsync("/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, meResponseWithOldToken.StatusCode);
+
+        using var anonymousClient = Fixture.CreateClient();
+        var oldPasswordResponse = await anonymousClient.PostAsJsonAsync("/auth/login", new LoginRequest
+        {
+            Identifier = createdUser.Username,
+            Password = "OriginalResetPass123!"
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, oldPasswordResponse.StatusCode);
+
+        var newPasswordResponse = await anonymousClient.PostAsJsonAsync("/auth/login", new LoginRequest
+        {
+            Identifier = createdUser.Email,
+            Password = "UpdatedResetPass123!"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, newPasswordResponse.StatusCode);
+
+        var auditLog = await FindAuditLogAsync(ObjectId.Parse(createdUser.Id), "UPDATE");
+        Assert.NotNull(auditLog);
+        Assert.Equal(adminLogin.User.Id, auditLog!.ActorUserId.ToString());
+        Assert.Contains("password reset", auditLog.Details?.Note ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 }
