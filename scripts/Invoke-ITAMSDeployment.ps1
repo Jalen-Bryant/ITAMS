@@ -5,7 +5,8 @@ param(
     [string]$BareRepositoryPath = "C:\Git\ITAMS.git",
     [string]$DeployRoot = "C:\inetpub\ITAMS",
     [string]$SecretsPath = "C:\ITAMS\Deploy\itams-production-env.json",
-    [string]$PublicUrl = "https://20.120.240.89",
+    [string]$PublicUrl = "https://itams.app",
+    [string]$LiveTestResolveAddress = "127.0.0.1",
     [int]$RetainReleases = 5
 )
 
@@ -68,6 +69,101 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path, $Content, $encoding)
 }
 
+function Add-CanonicalRedirectRules {
+    param(
+        [string]$WebConfigPath,
+        [string]$CanonicalHost = "itams.app",
+        [string]$WwwHost = "www.itams.app",
+        [string]$LegacyIpHost = "20.120.240.89"
+    )
+
+    [xml]$config = Get-Content -Raw -LiteralPath $WebConfigPath
+    $systemWebServer = $config.SelectSingleNode("/configuration/system.webServer")
+    if ($null -eq $systemWebServer) {
+        $systemWebServer = $config.CreateElement("system.webServer")
+        [void]$config.configuration.AppendChild($systemWebServer)
+    }
+
+    $rewrite = $systemWebServer.SelectSingleNode("rewrite")
+    if ($null -eq $rewrite) {
+        $rewrite = $config.CreateElement("rewrite")
+        [void]$systemWebServer.AppendChild($rewrite)
+    }
+
+    $rules = $rewrite.SelectSingleNode("rules")
+    if ($null -eq $rules) {
+        $rules = $config.CreateElement("rules")
+        [void]$rewrite.AppendChild($rules)
+    }
+
+    foreach ($ruleName in @("Redirect www.itams.app to itams.app", "Redirect public IP to itams.app", "Redirect itams.app HTTP to HTTPS")) {
+        $existingRule = $rules.SelectSingleNode("rule[@name='$ruleName']")
+        if ($existingRule) {
+            [void]$rules.RemoveChild($existingRule)
+        }
+    }
+
+    function New-RedirectRule {
+        param(
+            [string]$Name,
+            [string]$HostPattern,
+            [bool]$HttpsOffOnly = $false
+        )
+
+        $rule = $config.CreateElement("rule")
+        $rule.SetAttribute("name", $Name)
+        $rule.SetAttribute("stopProcessing", "true")
+
+        $match = $config.CreateElement("match")
+        $match.SetAttribute("url", "(.*)")
+        [void]$rule.AppendChild($match)
+
+        $conditions = $config.CreateElement("conditions")
+        $conditions.SetAttribute("logicalGrouping", "MatchAll")
+
+        $hostCondition = $config.CreateElement("add")
+        $hostCondition.SetAttribute("input", "{HTTP_HOST}")
+        $hostCondition.SetAttribute("pattern", $HostPattern)
+        [void]$conditions.AppendChild($hostCondition)
+
+        if ($HttpsOffOnly) {
+            $httpsCondition = $config.CreateElement("add")
+            $httpsCondition.SetAttribute("input", "{HTTPS}")
+            $httpsCondition.SetAttribute("pattern", "off")
+            [void]$conditions.AppendChild($httpsCondition)
+        }
+
+        [void]$rule.AppendChild($conditions)
+
+        $action = $config.CreateElement("action")
+        $action.SetAttribute("type", "Redirect")
+        $action.SetAttribute("url", "https://$CanonicalHost/{R:1}")
+        $action.SetAttribute("redirectType", "Permanent")
+        [void]$rule.AppendChild($action)
+
+        return $rule
+    }
+
+    $canonicalPattern = "^$([regex]::Escape($CanonicalHost))(?::\d+)?$"
+    $wwwPattern = "^$([regex]::Escape($WwwHost))(?::\d+)?$"
+    $legacyIpPattern = "^$([regex]::Escape($LegacyIpHost))(?::\d+)?$"
+
+    foreach ($rule in @(
+        (New-RedirectRule -Name "Redirect itams.app HTTP to HTTPS" -HostPattern $canonicalPattern -HttpsOffOnly $true),
+        (New-RedirectRule -Name "Redirect public IP to itams.app" -HostPattern $legacyIpPattern),
+        (New-RedirectRule -Name "Redirect www.itams.app to itams.app" -HostPattern $wwwPattern)
+    )) {
+        if ($rules.FirstChild) {
+            [void]$rules.InsertBefore($rule, $rules.FirstChild)
+        }
+        else {
+            [void]$rules.AppendChild($rule)
+        }
+    }
+
+    $config.Save($WebConfigPath)
+}
+
 function Add-ApiRewriteExclusion {
     param(
         [string]$WebConfigPath
@@ -76,6 +172,11 @@ function Add-ApiRewriteExclusion {
     [xml]$config = Get-Content -Raw -LiteralPath $WebConfigPath
     $rules = $config.SelectNodes("/configuration/system.webServer/rewrite/rules/rule")
     foreach ($rule in $rules) {
+        $action = $rule.SelectSingleNode("action")
+        if ($null -eq $action -or $action.GetAttribute("type") -ne "Rewrite") {
+            continue
+        }
+
         $conditions = $rule.SelectSingleNode("conditions")
         if ($null -eq $conditions) {
             $conditions = $config.CreateElement("conditions")
@@ -209,18 +310,56 @@ function Restart-AppPoolSafe {
     }
 }
 
+function Invoke-LiveRequest {
+    param(
+        [string]$Url,
+        [string]$ResolveAddress
+    )
+
+    $uri = [Uri]$Url
+    $port = if ($uri.IsDefaultPort) {
+        if ($uri.Scheme -eq "https") { 443 } else { 80 }
+    }
+    else {
+        $uri.Port
+    }
+
+    $bodyPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $arguments = @("--silent", "--show-error", "--max-time", "60")
+        if (-not [string]::IsNullOrWhiteSpace($ResolveAddress)) {
+            $arguments += @("--resolve", "$($uri.Host):${port}:$ResolveAddress")
+        }
+
+        $arguments += @("--output", $bodyPath, "--write-out", "%{http_code}", $Url)
+        $statusText = & curl.exe @arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "curl.exe failed for $Url with exit code $LASTEXITCODE."
+        }
+
+        return [pscustomobject]@{
+            StatusCode = [int]$statusText
+            Content = Get-Content -Raw -LiteralPath $bodyPath
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $bodyPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Test-LiveSite {
     param(
         [string]$PublicUrl,
-        [string]$ExpectedApiBaseUrl
+        [string]$ExpectedApiBaseUrl,
+        [string]$ResolveAddress
     )
 
-    $rootResponse = Invoke-WebRequest -Uri "$PublicUrl/" -UseBasicParsing -TimeoutSec 60
+    $rootResponse = Invoke-LiveRequest -Url "$PublicUrl/" -ResolveAddress $ResolveAddress
     if ([int]$rootResponse.StatusCode -ne 200 -or $rootResponse.Content -notmatch "blazor\.webassembly") {
         throw "The live site root did not return the expected Blazor HTML."
     }
 
-    $settingsResponse = Invoke-WebRequest -Uri "$PublicUrl/appsettings.json" -UseBasicParsing -TimeoutSec 60
+    $settingsResponse = Invoke-LiveRequest -Url "$PublicUrl/appsettings.json" -ResolveAddress $ResolveAddress
     $settings = $settingsResponse.Content | ConvertFrom-Json
     if ($settings.ApiBaseUrl -ne $ExpectedApiBaseUrl) {
         throw "The live appsettings.json does not point at the expected API URL."
@@ -230,16 +369,11 @@ function Test-LiveSite {
     $apiStatusCode = $null
     do {
         try {
-            $apiResponse = Invoke-WebRequest -Uri "$PublicUrl/api/auth/me" -UseBasicParsing -TimeoutSec 30
+            $apiResponse = Invoke-LiveRequest -Url "$PublicUrl/api/auth/me" -ResolveAddress $ResolveAddress
             $apiStatusCode = [int]$apiResponse.StatusCode
         }
         catch {
-            if ($_.Exception.Response) {
-                $apiStatusCode = [int]$_.Exception.Response.StatusCode
-            }
-            else {
-                $apiStatusCode = $null
-            }
+            $apiStatusCode = $null
         }
 
         if ($apiStatusCode -eq 401) {
@@ -311,6 +445,7 @@ try {
     Remove-Item -LiteralPath (Join-Path $clientPublishPath "wwwroot\appsettings.json.br") -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $clientPublishPath "wwwroot\appsettings.json.gz") -Force -ErrorAction SilentlyContinue
 
+    Add-CanonicalRedirectRules -WebConfigPath (Join-Path $clientPublishPath "web.config")
     Add-ApiRewriteExclusion -WebConfigPath (Join-Path $clientPublishPath "web.config")
     Set-ApiEnvironmentVariables -WebConfigPath (Join-Path $apiPublishPath "web.config") -SecretsPath $SecretsPath
     New-Item -ItemType Directory -Path (Join-Path $apiPublishPath "logs") -Force | Out-Null
@@ -334,7 +469,7 @@ try {
         Restart-AppPoolSafe -Name "ITAMS.Site"
         Start-Website -Name "ITAMS"
 
-        Test-LiveSite -PublicUrl $PublicUrl -ExpectedApiBaseUrl $expectedApiBaseUrl
+        Test-LiveSite -PublicUrl $PublicUrl -ExpectedApiBaseUrl $expectedApiBaseUrl -ResolveAddress $LiveTestResolveAddress
     }
     catch {
         Write-Warning "Live smoke test failed after switching release. Rolling back IIS paths."
