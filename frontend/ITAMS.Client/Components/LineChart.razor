@@ -27,14 +27,12 @@ else
                         <title>@($"{point.Label}: {point.Value:N0}")</title>
                     </circle>
                 }
-            </svg>
-        </div>
 
-        <div class="line-chart__labels">
-            @foreach (var label in SampledLabels)
-            {
-                <span>@label.Text</span>
-            }
+                @foreach (var label in SampledLabels)
+                {
+                    @GetXAxisLabelMarkup(label)
+                }
+            </svg>
         </div>
 
         <div class="line-chart__summary">
@@ -61,6 +59,7 @@ else
     private const double AxisTitleX = -25;
     private const double AxisTitleY = 3.4;
     private const double TickLabelX = 16;
+    private const double XAxisLabelY = 56;
     private const double LeftPadding = 20;
     private const double TopPadding = 4;
     private const double PlotWidth = 77;
@@ -88,6 +87,9 @@ else
 
     private MarkupString GetTickMarkup(GridLineModel gridLine) =>
         new($"""<text class="line-chart__tick" x="{FormatNumber(TickLabelX)}" y="{FormatNumber(gridLine.Y)}" text-anchor="end" dominant-baseline="middle">{WebUtility.HtmlEncode(gridLine.Label)}</text>""");
+
+    private MarkupString GetXAxisLabelMarkup(AxisLabelModel label) =>
+        new($"""<text class="line-chart__x-label" x="{FormatNumber(GetX(label.Index))}" y="{FormatNumber(XAxisLabelY)}" text-anchor="{label.TextAnchor}">{WebUtility.HtmlEncode(label.Text)}</text>""");
 
     private IReadOnlyList<GridLineModel> GridLines =>
         Enumerable.Range(0, 5)
@@ -144,7 +146,9 @@ else
                 [
                     new AxisLabelModel
                     {
-                        Text = VisiblePoints[0].Label
+                        Index = 0,
+                        Text = VisiblePoints[0].Label,
+                        TextAnchor = "middle"
                     }
                 ];
             }
@@ -162,7 +166,9 @@ else
                 .OrderBy(index => index)
                 .Select(index => new AxisLabelModel
                 {
-                    Text = VisiblePoints[index].Label
+                    Index = index,
+                    Text = VisiblePoints[index].Label,
+                    TextAnchor = GetXAxisTextAnchor(index)
                 })
                 .ToList();
         }
@@ -178,6 +184,16 @@ else
 
     private static string FormatNumber(double value) =>
         value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private string GetXAxisTextAnchor(int index)
+    {
+        if (index == 0)
+        {
+            return "start";
+        }
+
+        return index == VisiblePoints.Count - 1 ? "end" : "middle";
+    }
 
     private sealed class GridLineModel
     {
@@ -195,6 +211,8 @@ else
 
     private sealed class AxisLabelModel
     {
+        public int Index { get; init; }
         public string Text { get; init; } = string.Empty;
+        public string TextAnchor { get; init; } = "middle";
     }
 }

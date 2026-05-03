@@ -1427,7 +1427,7 @@ select.input-control optgroup {
 
 .line-chart {
     display: grid;
-    grid-template-rows: minmax(16rem, 1fr) auto auto;
+    grid-template-rows: minmax(16rem, 1fr) auto;
     row-gap: 0.85rem;
     height: 100%;
 }
@@ -1462,6 +1462,14 @@ select.input-control optgroup {
     fill: var(--text-soft);
     font-size: 3px;
     font-weight: 600;
+    transition: fill var(--theme-transition-fast);
+}
+
+.line-chart__x-label {
+    fill: var(--text-soft);
+    font-size: 2.15px;
+    font-weight: 600;
+    letter-spacing: 0;
     transition: fill var(--theme-transition-fast);
 }
 
@@ -1509,32 +1517,6 @@ select.input-control optgroup {
 
 .line-chart__summary-item strong {
     font-size: 1.05rem;
-}
-
-.line-chart__labels {
-    min-height: 1.2rem;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-top: -0.15rem;
-}
-
-.line-chart__labels span {
-    flex: 1 1 0;
-    min-width: 0;
-    color: var(--text-soft);
-    font-size: 0.78rem;
-    text-align: center;
-    white-space: nowrap;
-}
-
-.line-chart__labels span:first-child {
-    text-align: left;
-}
-
-.line-chart__labels span:last-child {
-    text-align: right;
 }
 
 @media (max-width: 1320px) {
