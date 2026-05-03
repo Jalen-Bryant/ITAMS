@@ -1467,7 +1467,7 @@ select.input-control optgroup {
 
 .line-chart__x-label {
     fill: var(--text-soft);
-    font-size: 2.15px;
+    font-size: 2.05px;
     font-weight: 600;
     letter-spacing: 0;
     transition: fill var(--theme-transition-fast);

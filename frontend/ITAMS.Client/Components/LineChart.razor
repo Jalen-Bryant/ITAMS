@@ -147,28 +147,18 @@ else
                     new AxisLabelModel
                     {
                         Index = 0,
-                        Text = VisiblePoints[0].Label,
-                        TextAnchor = "middle"
+                        Text = FormatAxisLabel(VisiblePoints[0])
                     }
                 ];
             }
 
-            var targetCount = Math.Min(6, VisiblePoints.Count);
-            var indexes = new HashSet<int>();
-
-            for (var index = 0; index < targetCount; index++)
-            {
-                var sampleIndex = (int)Math.Round(index * (VisiblePoints.Count - 1d) / Math.Max(1, targetCount - 1), MidpointRounding.AwayFromZero);
-                indexes.Add(sampleIndex);
-            }
-
-            return indexes
-                .OrderBy(index => index)
+            var interval = GetXAxisLabelInterval();
+            return Enumerable.Range(0, VisiblePoints.Count)
+                .Where(index => index % interval == 0)
                 .Select(index => new AxisLabelModel
                 {
                     Index = index,
-                    Text = VisiblePoints[index].Label,
-                    TextAnchor = GetXAxisTextAnchor(index)
+                    Text = FormatAxisLabel(VisiblePoints[index])
                 })
                 .ToList();
         }
@@ -185,14 +175,20 @@ else
     private static string FormatNumber(double value) =>
         value.ToString("0.##", CultureInfo.InvariantCulture);
 
-    private string GetXAxisTextAnchor(int index)
+    private int GetXAxisLabelInterval()
     {
-        if (index == 0)
+        const int maximumLabelCount = 6;
+        return Math.Max(1, (int)Math.Ceiling(VisiblePoints.Count / (double)maximumLabelCount));
+    }
+
+    private static string FormatAxisLabel(ReportsTimeSeriesPointResponse point)
+    {
+        if (point.BucketStart != default)
         {
-            return "start";
+            return point.BucketStart.ToString("MMM yy", CultureInfo.InvariantCulture);
         }
 
-        return index == VisiblePoints.Count - 1 ? "end" : "middle";
+        return point.Label;
     }
 
     private sealed class GridLineModel
