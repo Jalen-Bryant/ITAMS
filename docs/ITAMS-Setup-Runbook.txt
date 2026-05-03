@@ -98,7 +98,7 @@ If port 7004 or 5173 is already in use, stop the conflicting process or change t
 
 Login or Stale Session Problems
 
-If login succeeds in the API but the browser behaves as if the session is invalid, clear the login page session state or remove the local storage key named itams.auth.session and try again.
+If login succeeds in the API but the browser behaves as if the session is invalid, clear the login page session state or remove the session storage key named itams.auth.session and try again.
 
 Bootstrap Admin Not Created
 
@@ -109,6 +109,6 @@ Operational Notes
 - Current API HTTPS URL: https://localhost:7004
 - Current frontend HTTPS URL: https://localhost:5173
 - Current frontend ApiBaseUrl: https://localhost:7004/
-- Development access tokens are configured for 60 minutes and refresh tokens are configured for 6 hours.
+- Development access tokens are configured for 15 minutes and refresh tokens are configured for 4 hours.
 - Keep placeholders in documentation and put real secrets only into the destination machine's user secrets store.
 - This guide is for local development and handoff, not for production deployment.

@@ -97,10 +97,9 @@ server-side session is still active.
 
 Role authorization is evaluated from the JWT `role` claim through ASP.NET Core
 authorization policies. The request-time session check confirms that the
-backing session is active and that the user record still exists and is active,
-but it does not recompute the user's role from MongoDB for every request. If a
-role is changed while an access token is active, the previous role can remain in
-effect until that token expires or the user's sessions are revoked.
+backing session is active and that the user record still exists and is active.
+User role changes and active-status changes revoke that user's sessions so old
+access and refresh tokens cannot continue with stale authorization.
 
 Password hashing uses `PasswordHasher<UserDocument>` from ASP.NET Core Identity.
 The app has a bootstrap-admin configuration path for the first login-capable
@@ -115,7 +114,7 @@ Authorization is policy-based. Policies cover:
 - History read access.
 - Reports read access.
 
-The Blazor client keeps session state in browser local storage under
+The Blazor client keeps session state in browser session storage under
 `itams.auth.session` and attaches access tokens to authorized API requests.
 Client-side role-aware navigation mirrors the API policy roles for usability,
 but the API remains the enforcement point.

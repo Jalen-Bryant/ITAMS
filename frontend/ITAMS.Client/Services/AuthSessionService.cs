@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Components;
 namespace ITAMS.Client.Services;
 
 public sealed class AuthSessionService(
-    LocalStorageService localStorageService,
+    BrowserSessionStorageService browserSessionStorageService,
     PublicApiClient publicApiClient,
     NavigationManager navigationManager)
 {
@@ -20,7 +20,7 @@ public sealed class AuthSessionService(
 
     public async Task InitializeAsync()
     {
-        CurrentSession = await localStorageService.GetAsync<AuthSession>(StorageKey);
+        CurrentSession = await browserSessionStorageService.GetAsync<AuthSession>(StorageKey);
         if (CurrentSession is null)
         {
             NotifySessionChanged();
@@ -152,7 +152,7 @@ public sealed class AuthSessionService(
     public async Task ClearSessionAsync(bool navigateToLogin = true)
     {
         CurrentSession = null;
-        await localStorageService.RemoveAsync(StorageKey);
+        await browserSessionStorageService.RemoveAsync(StorageKey);
         NotifySessionChanged();
 
         if (navigateToLogin)
@@ -195,11 +195,11 @@ public sealed class AuthSessionService(
     {
         if (CurrentSession is null)
         {
-            await localStorageService.RemoveAsync(StorageKey);
+            await browserSessionStorageService.RemoveAsync(StorageKey);
             return;
         }
 
-        await localStorageService.SetAsync(StorageKey, CurrentSession);
+        await browserSessionStorageService.SetAsync(StorageKey, CurrentSession);
     }
 
     private void NotifySessionChanged() => SessionChanged?.Invoke();

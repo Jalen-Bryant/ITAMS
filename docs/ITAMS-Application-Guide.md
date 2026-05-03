@@ -79,9 +79,9 @@ Permission enforcement notes:
 
 - The client hides navigation links and write controls that the current role
   cannot use, but server-side API policies are the enforcement point.
-- Role changes are reflected in new access tokens immediately. Existing access
-  tokens can still carry the previous role until they expire; the default
-  access-token lifetime is 60 minutes.
+- Role and active-status changes revoke that user's existing sessions so old
+  access and refresh tokens cannot continue with stale authorization. The
+  default access-token lifetime is 15 minutes.
 - Before demoting, deactivating, or deleting an `Admin`, confirm that another
   active login-capable `Admin` account exists.
 
@@ -89,18 +89,19 @@ Permission enforcement notes:
 
 - Users sign in at `https://itams.app/login`.
 - The API issues a JWT access token and refresh token after successful login.
-- The client stores the session in browser local storage under
+- The client stores the session in browser session storage under
   `itams.auth.session`.
 - Access tokens are short-lived. Refresh tokens let the client refresh the
   session while the backing server session remains active.
 - Every authorized API request checks that the user's backing session is still
   active.
 - Signing out revokes the current session.
-- Changing a password revokes existing sessions for that user.
+- Changing a password, role, or active status revokes existing sessions for
+  that user.
 - Inactive users cannot continue using the application.
 
 If a browser appears stuck with stale sign-in state, clear site data for
-`itams.app` or remove the `itams.auth.session` local storage item and sign in
+`itams.app` or remove the `itams.auth.session` session storage item and sign in
 again.
 
 ## Common Workflows

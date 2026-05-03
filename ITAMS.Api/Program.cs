@@ -90,6 +90,10 @@ var allowedOrigins = configuredCorsSettings.AllowedOrigins
     .Select(origin => origin.Trim().TrimEnd('/'))
     .Distinct(StringComparer.OrdinalIgnoreCase)
     .ToArray();
+if (!builder.Environment.IsDevelopment())
+{
+    allowedOrigins = ["https://itams.app", "https://www.itams.app"];
+}
 
 builder.Services.AddCors(options =>
 {

@@ -134,15 +134,21 @@ The file must be ACL-protected and must stay out of Git. Required values:
   "ASPNETCORE_ENVIRONMENT": "Production",
   "MongoDb__ConnectionString": "<MONGODB_CONNECTION_STRING>",
   "Jwt__SigningKey": "<JWT_SIGNING_KEY_AT_LEAST_32_CHARACTERS>",
+  "Jwt__AccessTokenMinutes": "15",
+  "Jwt__RefreshTokenHours": "4",
   "BootstrapAdmin__Username": "<BOOTSTRAP_ADMIN_USERNAME>",
   "BootstrapAdmin__DisplayName": "<BOOTSTRAP_ADMIN_DISPLAY_NAME>",
   "BootstrapAdmin__Email": "<BOOTSTRAP_ADMIN_EMAIL>",
   "BootstrapAdmin__Department": "<BOOTSTRAP_ADMIN_DEPARTMENT>",
   "BootstrapAdmin__Password": "<BOOTSTRAP_ADMIN_PASSWORD>",
   "Cors__AllowedOrigins__0": "https://itams.app",
-  "Cors__AllowedOrigins__1": "https://www.itams.app"
+  "Cors__AllowedOrigins__1": "https://www.itams.app",
+  "Security__ContentSecurityPolicyReportOnly": "false"
 }
 ```
+
+Production CORS and CSP are intentionally restricted to `https://itams.app` and
+`https://www.itams.app`. Localhost origins belong only in development settings.
 
 Never paste real values from this file into documentation, Git commits, tickets,
 or chat logs.

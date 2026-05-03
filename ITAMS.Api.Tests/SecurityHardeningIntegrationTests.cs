@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using ITAMS.Api.Configuration;
 using ITAMS.Api.Contracts;
 using ITAMS.Api.Tests.TestInfrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Xunit;
@@ -135,6 +138,42 @@ public sealed class SecurityHardeningIntegrationTests(ApiIntegrationTestFixture 
         Assert.True(response.Headers.Contains("Permissions-Policy"));
         Assert.True(response.Headers.Contains("Content-Security-Policy-Report-Only"));
         Assert.False(response.Headers.Contains("Strict-Transport-Security"));
+
+        Assert.True(response.Headers.TryGetValues("Content-Security-Policy-Report-Only", out var cspValues));
+        var csp = string.Join(" ", cspValues);
+        Assert.Contains("localhost", csp);
+        Assert.Contains("ws://localhost:*", csp);
+    }
+
+    [Fact]
+    public async Task ProductionSecurityHeadersUseEnforcedCspWithoutLocalhostConnectSources()
+    {
+        using var scope = Fixture.Factory.Services.CreateScope();
+        var mongoDbSettings = scope.ServiceProvider.GetRequiredService<IOptions<MongoDbSettings>>().Value;
+
+        using var factory = CreateFactoryWithConfiguration(
+            new Dictionary<string, string?>
+            {
+                ["MongoDb:ConnectionString"] = mongoDbSettings.ConnectionString,
+                ["Security:ContentSecurityPolicyReportOnly"] = "false",
+                ["Security:GeneralRateLimit:PermitLimit"] = "1000"
+            },
+            "Production");
+        using var client = CreateClient(factory);
+
+        var response = await client.GetAsync("/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.True(response.Headers.Contains("Strict-Transport-Security"));
+        Assert.True(response.Headers.Contains("Content-Security-Policy"));
+        Assert.False(response.Headers.Contains("Content-Security-Policy-Report-Only"));
+
+        Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var cspValues));
+        var csp = string.Join(" ", cspValues);
+        Assert.Contains("https://itams.app", csp);
+        Assert.Contains("https://www.itams.app", csp);
+        Assert.DoesNotContain("localhost", csp);
+        Assert.DoesNotContain("ws://", csp);
     }
 
     [Fact]
@@ -191,9 +230,15 @@ public sealed class SecurityHardeningIntegrationTests(ApiIntegrationTestFixture 
     }
 
     private WebApplicationFactory<Program> CreateFactoryWithConfiguration(
-        IReadOnlyDictionary<string, string?> configuration) =>
+        IReadOnlyDictionary<string, string?> configuration,
+        string? environment = null) =>
         Fixture.Factory.WithWebHostBuilder(builder =>
         {
+            if (!string.IsNullOrWhiteSpace(environment))
+            {
+                builder.UseEnvironment(environment);
+            }
+
             builder.ConfigureAppConfiguration((_, configurationBuilder) =>
             {
                 configurationBuilder.AddInMemoryCollection(configuration);

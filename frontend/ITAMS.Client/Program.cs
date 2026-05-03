@@ -20,7 +20,7 @@ if (!apiBaseUrl.EndsWith("/", StringComparison.Ordinal))
 }
 
 builder.Services.AddAuthorizationCore();
-builder.Services.AddScoped<LocalStorageService>();
+builder.Services.AddScoped<BrowserSessionStorageService>();
 builder.Services.AddScoped(sp => new PublicApiClient(new HttpClient
 {
     BaseAddress = new Uri(apiBaseUrl, UriKind.Absolute)

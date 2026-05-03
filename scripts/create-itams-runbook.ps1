@@ -163,7 +163,7 @@ $paragraphs.Add((New-ParagraphXml -Text "If localhost HTTPS endpoints show trust
 $paragraphs.Add((New-ParagraphXml -Text "Ports Already in Use" -Style "Heading2"))
 $paragraphs.Add((New-ParagraphXml -Text "If port 7004 or 5173 is already in use, stop the conflicting process or change the launch profile ports. If you change ports or hosts, also update frontend\ITAMS.Client\wwwroot\appsettings.json and the Cors:AllowedOrigins entries in ITAMS.Api\appsettings.json." -Style "Normal"))
 $paragraphs.Add((New-ParagraphXml -Text "Login or Stale Session Problems" -Style "Heading2"))
-$paragraphs.Add((New-ParagraphXml -Text "If login succeeds in the API but the browser behaves as if the session is invalid, clear the login page session state or remove the local storage key named itams.auth.session and try again." -Style "Normal"))
+$paragraphs.Add((New-ParagraphXml -Text "If login succeeds in the API but the browser behaves as if the session is invalid, clear the login page session state or remove the session storage key named itams.auth.session and try again." -Style "Normal"))
 $paragraphs.Add((New-ParagraphXml -Text "Bootstrap Admin Not Created" -Style "Heading2"))
 $paragraphs.Add((New-ParagraphXml -Text "Bootstrap admin seeding is dormant when login-capable users already exist in the configured database. In that case, use an existing account or point the API at a clean development database if you need bootstrap credentials to be created." -Style "Normal"))
 
@@ -171,7 +171,7 @@ $paragraphs.Add((New-ParagraphXml -Text "Operational Notes" -Style "Heading1"))
 $paragraphs.Add((New-ParagraphXml -Text "Current API HTTPS URL: https://localhost:7004" -NumberId 1))
 $paragraphs.Add((New-ParagraphXml -Text "Current frontend HTTPS URL: https://localhost:5173" -NumberId 1))
 $paragraphs.Add((New-ParagraphXml -Text "Current frontend ApiBaseUrl: https://localhost:7004/" -NumberId 1))
-$paragraphs.Add((New-ParagraphXml -Text "Development access tokens are configured for 60 minutes and refresh tokens are configured for 6 hours." -NumberId 1))
+$paragraphs.Add((New-ParagraphXml -Text "Development access tokens are configured for 15 minutes and refresh tokens are configured for 4 hours." -NumberId 1))
 $paragraphs.Add((New-ParagraphXml -Text "Keep placeholders in documentation and put real secrets only into the destination machine's user secrets store." -NumberId 1))
 $paragraphs.Add((New-ParagraphXml -Text "This guide is for local development and handoff, not for production deployment." -NumberId 1))
 

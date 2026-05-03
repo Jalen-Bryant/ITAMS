@@ -10,6 +10,7 @@ public sealed class UserMutationService
 {
     private readonly IMongoClient _mongoClient;
     private readonly IMongoCollection<UserDocument> _usersCollection;
+    private readonly IMongoCollection<UserSessionDocument> _sessionsCollection;
     private readonly IMongoCollection<AuditLogDocument> _auditLogsCollection;
 
     public UserMutationService(IMongoClient mongoClient, IOptions<MongoDbSettings> settings)
@@ -18,6 +19,7 @@ public sealed class UserMutationService
         var mongoDbSettings = settings.Value;
         var database = mongoClient.GetDatabase(mongoDbSettings.DatabaseName);
         _usersCollection = database.GetCollection<UserDocument>(mongoDbSettings.UsersCollectionName);
+        _sessionsCollection = database.GetCollection<UserSessionDocument>(mongoDbSettings.UserSessionsCollectionName);
         _auditLogsCollection = database.GetCollection<AuditLogDocument>(mongoDbSettings.AuditLogsCollectionName);
     }
 
@@ -65,6 +67,10 @@ public sealed class UserMutationService
             return new MutationResult<UserDocument> { NotFound = true };
         }
 
+        var shouldRevokeSessions =
+            !string.Equals(existingUser.Role, updatedUser.Role, StringComparison.Ordinal) ||
+            existingUser.IsActive != updatedUser.IsActive;
+
         var replaceResult = await _usersCollection.ReplaceOneAsync(
             session,
             user => user.Id == updatedUser.Id,
@@ -74,6 +80,20 @@ public sealed class UserMutationService
         {
             await session.AbortTransactionAsync(cancellationToken);
             return new MutationResult<UserDocument> { NotFound = true };
+        }
+
+        if (shouldRevokeSessions)
+        {
+            var now = DateTime.UtcNow;
+            var revokeUpdate = Builders<UserSessionDocument>.Update
+                .Set(existing => existing.RevokedAt, now)
+                .Set(existing => existing.ExpiresAt, now);
+
+            await _sessionsCollection.UpdateManyAsync(
+                session,
+                existing => existing.UserId == updatedUser.Id && existing.RevokedAt == null,
+                revokeUpdate,
+                cancellationToken: cancellationToken);
         }
 
         var auditLog = MutationDocumentFactory.CreateAuditLog(

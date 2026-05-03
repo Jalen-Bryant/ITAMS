@@ -177,4 +177,106 @@ public sealed class AuthenticationIntegrationTests(ApiIntegrationTestFixture fix
         Assert.Equal(adminLogin.User.Id, auditLog!.ActorUserId.ToString());
         Assert.Contains("password reset", auditLog.Details?.Note ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task UserRoleChangeRevokesExistingSessions_AndRefreshToken()
+    {
+        var adminLogin = await LoginAsBootstrapAdminAsync();
+        using var adminClient = CreateAuthenticatedClient(adminLogin.AccessToken);
+
+        var createdUser = await CreateUserAsync(adminClient, "User", "RoleChangePass123!");
+        var userLogin = await LoginAsync(createdUser.Username, "RoleChangePass123!");
+
+        var updateResponse = await adminClient.PutAsJsonAsync($"/users/{createdUser.Id}", new UpdateUserRequest
+        {
+            Username = createdUser.Username,
+            DisplayName = createdUser.DisplayName,
+            Email = createdUser.Email,
+            Role = "Auditor",
+            Department = createdUser.Department,
+            IsActive = createdUser.IsActive
+        });
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+        using var userClient = CreateAuthenticatedClient(userLogin.AccessToken);
+        var meResponseWithOldToken = await userClient.GetAsync("/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, meResponseWithOldToken.StatusCode);
+
+        using var anonymousClient = Fixture.CreateClient();
+        var oldRefreshResponse = await anonymousClient.PostAsJsonAsync("/auth/refresh", new RefreshTokenRequest
+        {
+            RefreshToken = userLogin.RefreshToken
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, oldRefreshResponse.StatusCode);
+
+        var updatedLogin = await LoginAsync(createdUser.Username, "RoleChangePass123!");
+        Assert.Equal("Auditor", updatedLogin.User.Role);
+    }
+
+    [Fact]
+    public async Task UserActiveStatusChangeRevokesExistingSessions_AndDisabledUserCannotLogin()
+    {
+        var adminLogin = await LoginAsBootstrapAdminAsync();
+        using var adminClient = CreateAuthenticatedClient(adminLogin.AccessToken);
+
+        var createdUser = await CreateUserAsync(adminClient, "User", "StatusChangePass123!");
+        var userLogin = await LoginAsync(createdUser.Username, "StatusChangePass123!");
+
+        var disableResponse = await adminClient.PutAsJsonAsync($"/users/{createdUser.Id}", new UpdateUserRequest
+        {
+            Username = createdUser.Username,
+            DisplayName = createdUser.DisplayName,
+            Email = createdUser.Email,
+            Role = createdUser.Role,
+            Department = createdUser.Department,
+            IsActive = false
+        });
+
+        Assert.Equal(HttpStatusCode.OK, disableResponse.StatusCode);
+
+        using var userClient = CreateAuthenticatedClient(userLogin.AccessToken);
+        var meResponseWithOldToken = await userClient.GetAsync("/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, meResponseWithOldToken.StatusCode);
+
+        using var anonymousClient = Fixture.CreateClient();
+        var oldRefreshResponse = await anonymousClient.PostAsJsonAsync("/auth/refresh", new RefreshTokenRequest
+        {
+            RefreshToken = userLogin.RefreshToken
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, oldRefreshResponse.StatusCode);
+
+        var disabledLoginResponse = await anonymousClient.PostAsJsonAsync("/auth/login", new LoginRequest
+        {
+            Identifier = createdUser.Username,
+            Password = "StatusChangePass123!"
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, disabledLoginResponse.StatusCode);
+
+        var reenableResponse = await adminClient.PutAsJsonAsync($"/users/{createdUser.Id}", new UpdateUserRequest
+        {
+            Username = createdUser.Username,
+            DisplayName = createdUser.DisplayName,
+            Email = createdUser.Email,
+            Role = createdUser.Role,
+            Department = createdUser.Department,
+            IsActive = true
+        });
+
+        Assert.Equal(HttpStatusCode.OK, reenableResponse.StatusCode);
+
+        var meResponseWithRevokedToken = await userClient.GetAsync("/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, meResponseWithRevokedToken.StatusCode);
+
+        var reenabledLoginResponse = await anonymousClient.PostAsJsonAsync("/auth/login", new LoginRequest
+        {
+            Identifier = createdUser.Username,
+            Password = "StatusChangePass123!"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, reenabledLoginResponse.StatusCode);
+    }
 }

@@ -5,18 +5,25 @@ namespace ITAMS.Api.Middleware;
 
 public static class SecurityMiddlewareExtensions
 {
-    private const string ContentSecurityPolicy =
+    private const string ContentSecurityPolicyPrefix =
         "default-src 'self'; " +
         "base-uri 'self'; " +
         "object-src 'none'; " +
         "frame-ancestors 'none'; " +
         "img-src 'self' data:; " +
         "style-src 'self' 'unsafe-inline'; " +
-        "script-src 'self' 'wasm-unsafe-eval'; " +
-        "connect-src 'self' https://itams.app https://www.itams.app http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*; " +
+        "script-src 'self' 'wasm-unsafe-eval'; ";
+
+    private const string ContentSecurityPolicySuffix =
         "font-src 'self' data:; " +
         "form-action 'self'; " +
         "upgrade-insecure-requests";
+
+    private const string ProductionConnectPolicy =
+        "connect-src 'self' https://itams.app https://www.itams.app; ";
+
+    private const string DevelopmentConnectPolicy =
+        "connect-src 'self' https://itams.app https://www.itams.app http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*; ";
 
     public static IApplicationBuilder UseItamsSecurityHeaders(
         this IApplicationBuilder app,
@@ -38,7 +45,7 @@ public static class SecurityMiddlewareExtensions
                 var cspHeaderName = settings.Value.ContentSecurityPolicyReportOnly
                     ? "Content-Security-Policy-Report-Only"
                     : "Content-Security-Policy";
-                headers.TryAdd(cspHeaderName, ContentSecurityPolicy);
+                headers.TryAdd(cspHeaderName, BuildContentSecurityPolicy(environment));
 
                 if (!environment.IsDevelopment() && httpContext.Request.IsHttps)
                 {
@@ -51,6 +58,11 @@ public static class SecurityMiddlewareExtensions
             await next(httpContext);
         });
     }
+
+    private static string BuildContentSecurityPolicy(IHostEnvironment environment) =>
+        ContentSecurityPolicyPrefix +
+        (environment.IsDevelopment() ? DevelopmentConnectPolicy : ProductionConnectPolicy) +
+        ContentSecurityPolicySuffix;
 
     public static IApplicationBuilder UseItamsRequestBodyLimit(
         this IApplicationBuilder app,

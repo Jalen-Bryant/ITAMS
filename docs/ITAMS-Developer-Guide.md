@@ -154,8 +154,8 @@ key, token lifetime, role claims, and backing session activity.
 | `User` | None | None | None | None | None |
 
 Role policies authorize from the JWT `role` claim. The per-request session
-check confirms that the backing session and user are still active, but it does
-not reload the current role from MongoDB on every request.
+check confirms that the backing session and user are still active. Role and
+active-status updates revoke existing sessions for the changed user.
 
 ### Authorization Maintenance Checklist
 
@@ -173,11 +173,9 @@ one active login-capable `Admin` to remain available.
 ### Authorization Test Gaps
 
 The current test suite covers representative role checks, authentication,
-session refresh, logout, password changes, and read-only history routes. Add
+session refresh, logout, password changes, role/status session revocation, and read-only history routes. Add
 targeted tests before relying on stricter guarantees for:
 
-- Role downgrade while an old access token is still active.
-- User deactivation through `/users` and the effect on active sessions.
 - Admin self-demotion or self-deactivation.
 - Last active login-capable Admin removal.
 
@@ -186,7 +184,7 @@ targeted tests before relying on stricter guarantees for:
 - The client is Blazor WebAssembly.
 - Authorized requests use an auth message handler that attaches the current
   access token.
-- Session state is stored in browser local storage with key
+- Session state is stored in browser session storage with key
   `itams.auth.session`.
 - Role-aware navigation is implemented client-side for usability, but API
   authorization remains the enforcement point.
@@ -259,7 +257,7 @@ localhost and `127.0.0.1` ports.
 
 ### Login Or Stale Session Problems
 
-Clear site data or remove `itams.auth.session` from local storage, then sign in
+Clear site data or remove `itams.auth.session` from session storage, then sign in
 again.
 
 ### Bootstrap Admin Was Not Created

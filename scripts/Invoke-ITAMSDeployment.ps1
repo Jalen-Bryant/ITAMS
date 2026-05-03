@@ -240,7 +240,7 @@ function Add-SecurityHeaders {
 
     $headers = @(
         @{ Name = "Strict-Transport-Security"; Value = "max-age=31536000; includeSubDomains" },
-        @{ Name = "Content-Security-Policy-Report-Only"; Value = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https://itams.app https://www.itams.app; font-src 'self' data:; form-action 'self'; upgrade-insecure-requests" },
+        @{ Name = "Content-Security-Policy"; Value = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https://itams.app https://www.itams.app; font-src 'self' data:; form-action 'self'; upgrade-insecure-requests" },
         @{ Name = "X-Content-Type-Options"; Value = "nosniff" },
         @{ Name = "X-Frame-Options"; Value = "DENY" },
         @{ Name = "Referrer-Policy"; Value = "strict-origin-when-cross-origin" },
@@ -315,6 +315,55 @@ function Set-ApiEnvironmentVariables {
         $secrets | Add-Member -NotePropertyName "AllowedHosts" -NotePropertyValue "itams.app;www.itams.app"
     }
 
+    $environmentName = [string]$secrets.PSObject.Properties["ASPNETCORE_ENVIRONMENT"].Value
+    if ($environmentName.Equals("Production", [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($null -eq $secrets.PSObject.Properties["Jwt__AccessTokenMinutes"]) {
+            $secrets | Add-Member -NotePropertyName "Jwt__AccessTokenMinutes" -NotePropertyValue "15"
+        }
+        elseif ([string]$secrets.PSObject.Properties["Jwt__AccessTokenMinutes"].Value -ne "15") {
+            throw "Production Jwt__AccessTokenMinutes must be 15."
+        }
+
+        if ($null -eq $secrets.PSObject.Properties["Jwt__RefreshTokenHours"]) {
+            $secrets | Add-Member -NotePropertyName "Jwt__RefreshTokenHours" -NotePropertyValue "4"
+        }
+        elseif ([string]$secrets.PSObject.Properties["Jwt__RefreshTokenHours"].Value -ne "4") {
+            throw "Production Jwt__RefreshTokenHours must be 4."
+        }
+
+        if ($null -eq $secrets.PSObject.Properties["Security__ContentSecurityPolicyReportOnly"]) {
+            $secrets | Add-Member -NotePropertyName "Security__ContentSecurityPolicyReportOnly" -NotePropertyValue "false"
+        }
+        elseif (-not ([string]$secrets.PSObject.Properties["Security__ContentSecurityPolicyReportOnly"].Value).Equals("false", [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Production Security__ContentSecurityPolicyReportOnly must be false."
+        }
+
+        $allowedProductionCorsOrigins = @("https://itams.app", "https://www.itams.app")
+        $configuredCorsOrigins = @(
+            $secrets.PSObject.Properties |
+                Where-Object { $_.Name -match "^Cors__AllowedOrigins__\d+$" } |
+                Sort-Object Name |
+                ForEach-Object { [string]$_.Value } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+
+        if ($configuredCorsOrigins.Count -ne $allowedProductionCorsOrigins.Count) {
+            throw "Production CORS must include only https://itams.app and https://www.itams.app."
+        }
+
+        foreach ($origin in $configuredCorsOrigins) {
+            if ($allowedProductionCorsOrigins -notcontains $origin) {
+                throw "Production CORS origin '$origin' is not allowed."
+            }
+        }
+
+        foreach ($origin in $allowedProductionCorsOrigins) {
+            if ($configuredCorsOrigins -notcontains $origin) {
+                throw "Production CORS is missing required origin '$origin'."
+            }
+        }
+    }
+
     [xml]$config = Get-Content -Raw -LiteralPath $WebConfigPath
     $aspNetCore = $config.SelectSingleNode("/configuration/location/system.webServer/aspNetCore")
     if ($null -eq $aspNetCore) {
@@ -377,7 +426,7 @@ function Test-ReleaseArtifacts {
 
     [xml]$clientConfig = Get-Content -Raw -LiteralPath (Join-Path $ClientPath "web.config")
     $securityHeaders = @($clientConfig.SelectNodes("/configuration/system.webServer/httpProtocol/customHeaders/add"))
-    foreach ($requiredHeader in @("Strict-Transport-Security", "Content-Security-Policy-Report-Only", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy")) {
+    foreach ($requiredHeader in @("Strict-Transport-Security", "Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy")) {
         if (-not ($securityHeaders | Where-Object { $_.GetAttribute("name") -eq $requiredHeader })) {
             throw "Published client web.config is missing security header $requiredHeader."
         }
