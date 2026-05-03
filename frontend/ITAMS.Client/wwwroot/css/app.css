@@ -520,7 +520,7 @@ p {
 
 .hero-logo {
     width: min(280px, 60%);
-    margin-bottom: 1.2rem;
+    margin: 0 auto 1.2rem;
 }
 
 .hero-card h2 {
