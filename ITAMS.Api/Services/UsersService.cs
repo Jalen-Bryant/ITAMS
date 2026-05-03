@@ -23,9 +23,14 @@ public sealed class UsersService
         _usersCollection = database.GetCollection<UserDocument>(mongoDbSettings.UsersCollectionName);
     }
 
-    public async Task<IReadOnlyList<UserDocument>> GetAllAsync(CancellationToken cancellationToken = default) =>
+    public async Task<IReadOnlyList<UserDocument>> GetAllAsync(
+        PageRequest pageRequest,
+        CancellationToken cancellationToken = default) =>
         await _usersCollection
             .Find(FilterDefinition<UserDocument>.Empty)
+            .SortBy(user => user.Username)
+            .Skip(pageRequest.Offset)
+            .Limit(pageRequest.Limit)
             .ToListAsync(cancellationToken);
 
     public async Task<UserDocument?> GetByIdAsync(ObjectId id, CancellationToken cancellationToken = default) =>

@@ -1,5 +1,6 @@
 using ITAMS.Api.Configuration;
 using ITAMS.Api.Models;
+using ITAMS.Api.Validation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
@@ -68,6 +69,10 @@ public sealed class BootstrapAdminService
                 NormalizedEmail = normalizedEmail,
                 PasswordHash = _passwordHasher.HashPassword(existingUser, _settings.Password),
                 PasswordChangedAt = now,
+                FailedLoginCount = existingUser.FailedLoginCount,
+                FailedLoginWindowStartedAt = existingUser.FailedLoginWindowStartedAt,
+                LastFailedLoginAt = existingUser.LastFailedLoginAt,
+                LockoutEndAt = existingUser.LockoutEndAt,
                 Role = "Admin",
                 Department = _settings.Department.Trim(),
                 IsActive = true,
@@ -139,6 +144,13 @@ public sealed class BootstrapAdminService
         {
             throw new InvalidOperationException(
                 "No login-capable users exist. Configure BootstrapAdmin settings with a username, display name, email, department, and password before starting the API.");
+        }
+
+        var validationErrors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        RequestValidation.AddPasswordError(validationErrors, "BootstrapAdmin:Password", settings.Password);
+        if (validationErrors.Count > 0)
+        {
+            throw new InvalidOperationException(validationErrors["BootstrapAdmin:Password"][0]);
         }
     }
 }

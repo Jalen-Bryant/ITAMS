@@ -34,6 +34,24 @@ public sealed class UserDocument
     [BsonIgnoreIfNull]
     public DateTime? PasswordChangedAt { get; init; }
 
+    [BsonElement("failedLoginCount")]
+    public int FailedLoginCount { get; init; }
+
+    [BsonElement("failedLoginWindowStartedAt")]
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
+    [BsonIgnoreIfNull]
+    public DateTime? FailedLoginWindowStartedAt { get; init; }
+
+    [BsonElement("lastFailedLoginAt")]
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
+    [BsonIgnoreIfNull]
+    public DateTime? LastFailedLoginAt { get; init; }
+
+    [BsonElement("lockoutEndAt")]
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
+    [BsonIgnoreIfNull]
+    public DateTime? LockoutEndAt { get; init; }
+
     [BsonElement("role")]
     public string Role { get; init; } = string.Empty;
 

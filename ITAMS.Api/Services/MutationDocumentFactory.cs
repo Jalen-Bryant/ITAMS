@@ -12,7 +12,8 @@ internal static class MutationDocumentFactory
         string entityType,
         string? note,
         string ip,
-        string userAgent)
+        string userAgent,
+        string result = "SUCCESS")
     {
         return new AuditLogDocument
         {
@@ -22,7 +23,7 @@ internal static class MutationDocumentFactory
             Details = new AuditLogDetailDocument
             {
                 Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
-                Result = "SUCCESS"
+                Result = result
             },
             EntityId = entityId,
             EntityType = entityType,

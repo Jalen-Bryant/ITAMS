@@ -24,10 +24,17 @@ public static class AuditLogEndpoints
     }
 
     private static async Task<IResult> GetAllAuditLogsAsync(
+        int? offset,
+        int? limit,
         AuditLogsService auditLogsService,
         CancellationToken cancellationToken)
     {
-        var auditLogs = await auditLogsService.GetAllAsync(cancellationToken);
+        if (!PageRequest.TryCreate(offset, limit, out var pageRequest, out var validationErrors))
+        {
+            return Results.ValidationProblem(validationErrors);
+        }
+
+        var auditLogs = await auditLogsService.GetAllAsync(pageRequest, cancellationToken);
         return Results.Ok(auditLogs.Select(MapResponse));
     }
 

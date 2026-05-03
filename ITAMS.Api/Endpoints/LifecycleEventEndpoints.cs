@@ -24,10 +24,17 @@ public static class LifecycleEventEndpoints
     }
 
     private static async Task<IResult> GetAllLifecycleEventsAsync(
+        int? offset,
+        int? limit,
         LifecycleEventsService lifecycleEventsService,
         CancellationToken cancellationToken)
     {
-        var lifecycleEvents = await lifecycleEventsService.GetAllAsync(cancellationToken);
+        if (!PageRequest.TryCreate(offset, limit, out var pageRequest, out var validationErrors))
+        {
+            return Results.ValidationProblem(validationErrors);
+        }
+
+        var lifecycleEvents = await lifecycleEventsService.GetAllAsync(pageRequest, cancellationToken);
         return Results.Ok(lifecycleEvents.Select(MapResponse));
     }
 

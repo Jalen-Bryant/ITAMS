@@ -38,10 +38,17 @@ public static class AssignmentEndpoints
     }
 
     private static async Task<IResult> GetAllAssignmentsAsync(
+        int? offset,
+        int? limit,
         AssignmentsService assignmentsService,
         CancellationToken cancellationToken)
     {
-        var assignments = await assignmentsService.GetAllAsync(cancellationToken);
+        if (!PageRequest.TryCreate(offset, limit, out var pageRequest, out var validationErrors))
+        {
+            return Results.ValidationProblem(validationErrors);
+        }
+
+        var assignments = await assignmentsService.GetAllAsync(pageRequest, cancellationToken);
         return Results.Ok(assignments.Select(MapResponse));
     }
 

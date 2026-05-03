@@ -153,6 +153,12 @@ public static class AuthEndpoints
         var validationErrors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
         RequestValidation.AddPasswordError(validationErrors, "currentPassword", request.CurrentPassword);
         RequestValidation.AddPasswordError(validationErrors, "newPassword", request.NewPassword);
+        if (validationErrors.Count == 0 &&
+            string.Equals(request.CurrentPassword, request.NewPassword, StringComparison.Ordinal))
+        {
+            validationErrors["newPassword"] = ["newPassword must be different from currentPassword."];
+        }
+
         if (validationErrors.Count > 0)
         {
             return Results.ValidationProblem(validationErrors);

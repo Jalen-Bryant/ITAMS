@@ -1,14 +1,17 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using System.Threading.RateLimiting;
 using ITAMS.Api.Authorization;
 using ITAMS.Api.Configuration;
 using ITAMS.Api.Endpoints;
 using ITAMS.Api.ErrorHandling;
+using ITAMS.Api.Middleware;
 using ITAMS.Api.Models;
 using ITAMS.Api.Services;
 using ITAMS.Api.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -71,6 +74,15 @@ builder.Services
     .AddOptions<CorsSettings>()
     .Bind(builder.Configuration.GetSection(CorsSettings.SectionName));
 
+builder.Services
+    .AddOptions<SecuritySettings>()
+    .Bind(builder.Configuration.GetSection(SecuritySettings.SectionName))
+    .ValidateDataAnnotations()
+    .Validate(
+        settings => settings.AuthLockout.BaseLockoutMinutes <= settings.AuthLockout.MaxLockoutMinutes,
+        "Security:AuthLockout:BaseLockoutMinutes must be less than or equal to Security:AuthLockout:MaxLockoutMinutes.")
+    .ValidateOnStart();
+
 var configuredCorsSettings = builder.Configuration.GetSection(CorsSettings.SectionName).Get<CorsSettings>() ?? new CorsSettings();
 // Normalize configured origins once so the runtime policy does not have to reason about whitespace or trailing slashes.
 var allowedOrigins = configuredCorsSettings.AllowedOrigins
@@ -91,6 +103,34 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
+    });
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        var remoteIpAddress = httpContext.Connection.RemoteIpAddress;
+        var remoteIp = remoteIpAddress?.IsIPv4MappedToIPv6 == true
+            ? remoteIpAddress.MapToIPv4().ToString()
+            : remoteIpAddress?.ToString() ?? "unknown";
+        var isAuthEndpoint =
+            httpContext.Request.Path.Equals("/auth/login", StringComparison.OrdinalIgnoreCase) ||
+            httpContext.Request.Path.Equals("/auth/refresh", StringComparison.OrdinalIgnoreCase);
+        var security = httpContext.RequestServices.GetRequiredService<IOptions<SecuritySettings>>().Value;
+        var activeRateLimit = isAuthEndpoint ? security.AuthRateLimit : security.GeneralRateLimit;
+        var partitionKey = $"{(isAuthEndpoint ? "auth" : "general")}:{remoteIp}:{httpContext.Request.Path.Value?.ToUpperInvariant()}";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = activeRateLimit.PermitLimit,
+                QueueLimit = 0,
+                Window = TimeSpan.FromSeconds(activeRateLimit.WindowSeconds)
+            });
     });
 });
 
@@ -173,6 +213,8 @@ builder.Services.AddSingleton<UserSessionsService>();
 
 var app = builder.Build();
 
+var securitySettings = app.Services.GetRequiredService<IOptions<SecuritySettings>>();
+app.UseItamsSecurityHeaders(app.Environment, securitySettings);
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -188,7 +230,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseItamsRequestBodyLimit(securitySettings);
+app.UseRouting();
 app.UseCors(CorsSettings.PolicyName);
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapAuthEndpoints();

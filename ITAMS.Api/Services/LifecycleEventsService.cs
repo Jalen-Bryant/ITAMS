@@ -17,9 +17,14 @@ public sealed class LifecycleEventsService
         _lifecycleEventsCollection = database.GetCollection<LifecycleEventDocument>(mongoDbSettings.LifecycleEventsCollectionName);
     }
 
-    public async Task<IReadOnlyList<LifecycleEventDocument>> GetAllAsync(CancellationToken cancellationToken = default) =>
+    public async Task<IReadOnlyList<LifecycleEventDocument>> GetAllAsync(
+        PageRequest pageRequest,
+        CancellationToken cancellationToken = default) =>
         await _lifecycleEventsCollection
             .Find(FilterDefinition<LifecycleEventDocument>.Empty)
+            .SortByDescending(lifecycleEvent => lifecycleEvent.Timestamp)
+            .Skip(pageRequest.Offset)
+            .Limit(pageRequest.Limit)
             .ToListAsync(cancellationToken);
 
     public async Task<LifecycleEventDocument?> GetByIdAsync(ObjectId id, CancellationToken cancellationToken = default) =>

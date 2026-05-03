@@ -15,6 +15,7 @@ Management System hosted at `https://itams.app/`.
 | Document | Audience | Purpose |
 | --- | --- | --- |
 | [ITAMS Application Guide](./ITAMS-Application-Guide.md) | Application users, managers, support staff | Explains what the app does, the main workflows, roles, and login/session behavior. |
+| [ITAMS Tech Stack](./ITAMS-Tech-Stack.md) | Developers, technical stakeholders | Summarizes the backend, frontend, database, authentication, testing, deployment, and runtime technologies. |
 | [ITAMS Developer Guide](./ITAMS-Developer-Guide.md) | Developers | Explains the repo layout, local setup, configuration, API surface, tests, and troubleshooting. |
 | [ITAMS Production Operations](./ITAMS-Production-Operations.md) | IT admins, server operators, release owners | Explains the IIS server, domain, certificate, Git auto-deploy flow, rollback, validation, and admin tasks. |
 | [ITAMS Git Deployment](./ITAMS-Git-Deployment.md) | Developers, release owners | Short Git remote and deployment quick reference. |

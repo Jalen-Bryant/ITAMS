@@ -17,9 +17,14 @@ public sealed class AssignmentsService
         _assignmentsCollection = database.GetCollection<AssignmentDocument>(mongoDbSettings.AssignmentsCollectionName);
     }
 
-    public async Task<IReadOnlyList<AssignmentDocument>> GetAllAsync(CancellationToken cancellationToken = default) =>
+    public async Task<IReadOnlyList<AssignmentDocument>> GetAllAsync(
+        PageRequest pageRequest,
+        CancellationToken cancellationToken = default) =>
         await _assignmentsCollection
             .Find(FilterDefinition<AssignmentDocument>.Empty)
+            .SortByDescending(assignment => assignment.CreatedAt)
+            .Skip(pageRequest.Offset)
+            .Limit(pageRequest.Limit)
             .ToListAsync(cancellationToken);
 
     public async Task<AssignmentDocument?> GetByIdAsync(ObjectId id, CancellationToken cancellationToken = default) =>

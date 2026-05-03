@@ -73,9 +73,14 @@ public sealed class AssetsService
                sortOrder.ToInt32() == 1;
     }
 
-    public async Task<IReadOnlyList<AssetDocument>> GetAllAsync(CancellationToken cancellationToken = default) =>
+    public async Task<IReadOnlyList<AssetDocument>> GetAllAsync(
+        PageRequest pageRequest,
+        CancellationToken cancellationToken = default) =>
         await _assetsCollection
             .Find(FilterDefinition<AssetDocument>.Empty)
+            .SortBy(asset => asset.AssetTag)
+            .Skip(pageRequest.Offset)
+            .Limit(pageRequest.Limit)
             .ToListAsync(cancellationToken);
 
     public async Task<AssetDocument?> GetByIdAsync(ObjectId id, CancellationToken cancellationToken = default) =>

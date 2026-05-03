@@ -8,6 +8,8 @@ namespace ITAMS.Api.Endpoints;
 
 public static class ReportsEndpoints
 {
+    private const int MaxCustomRangeDays = 730;
+
     public static IEndpointRouteBuilder MapReportsEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/reports").WithTags("Reports");
@@ -100,6 +102,12 @@ public static class ReportsEndpoints
             parsedEndDate.Value < parsedStartDate.Value)
         {
             errors["endDate"] = ["endDate must be on or after startDate."];
+        }
+        else if (parsedStartDate is not null &&
+                 parsedEndDate is not null &&
+                 parsedEndDate.Value.DayNumber - parsedStartDate.Value.DayNumber > MaxCustomRangeDays)
+        {
+            errors["endDate"] = [$"custom report ranges cannot exceed {MaxCustomRangeDays} days."];
         }
 
         return errors;

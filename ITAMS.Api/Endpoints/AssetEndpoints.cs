@@ -39,10 +39,17 @@ public static class AssetEndpoints
     }
 
     private static async Task<IResult> GetAllAssetsAsync(
+        int? offset,
+        int? limit,
         AssetsService assetsService,
         CancellationToken cancellationToken)
     {
-        var assets = await assetsService.GetAllAsync(cancellationToken);
+        if (!PageRequest.TryCreate(offset, limit, out var pageRequest, out var validationErrors))
+        {
+            return Results.ValidationProblem(validationErrors);
+        }
+
+        var assets = await assetsService.GetAllAsync(pageRequest, cancellationToken);
         return Results.Ok(assets.Select(MapResponse));
     }
 

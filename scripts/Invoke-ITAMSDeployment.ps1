@@ -7,6 +7,8 @@ param(
     [string]$SecretsPath = "C:\ITAMS\Deploy\itams-production-env.json",
     [string]$PublicUrl = "https://itams.app",
     [string]$LiveTestResolveAddress = "127.0.0.1",
+    [string]$SiteAppPoolIdentity = "IIS AppPool\ITAMS.Site",
+    [string]$ApiAppPoolIdentity = "IIS AppPool\ITAMS.Api",
     [int]$RetainReleases = 5
 )
 
@@ -208,6 +210,89 @@ function Add-ApiRewriteExclusion {
     $config.Save($WebConfigPath)
 }
 
+function Add-SecurityHeaders {
+    param(
+        [string]$WebConfigPath
+    )
+
+    [xml]$config = Get-Content -Raw -LiteralPath $WebConfigPath
+    $systemWebServer = $config.SelectSingleNode("/configuration/system.webServer")
+    if ($null -eq $systemWebServer) {
+        $systemWebServer = $config.SelectSingleNode("/configuration/location/system.webServer")
+    }
+
+    if ($null -eq $systemWebServer) {
+        $systemWebServer = $config.CreateElement("system.webServer")
+        [void]$config.configuration.AppendChild($systemWebServer)
+    }
+
+    $httpProtocol = $systemWebServer.SelectSingleNode("httpProtocol")
+    if ($null -eq $httpProtocol) {
+        $httpProtocol = $config.CreateElement("httpProtocol")
+        [void]$systemWebServer.AppendChild($httpProtocol)
+    }
+
+    $customHeaders = $httpProtocol.SelectSingleNode("customHeaders")
+    if ($null -eq $customHeaders) {
+        $customHeaders = $config.CreateElement("customHeaders")
+        [void]$httpProtocol.AppendChild($customHeaders)
+    }
+
+    $headers = @(
+        @{ Name = "Strict-Transport-Security"; Value = "max-age=31536000; includeSubDomains" },
+        @{ Name = "Content-Security-Policy-Report-Only"; Value = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https://itams.app https://www.itams.app; font-src 'self' data:; form-action 'self'; upgrade-insecure-requests" },
+        @{ Name = "X-Content-Type-Options"; Value = "nosniff" },
+        @{ Name = "X-Frame-Options"; Value = "DENY" },
+        @{ Name = "Referrer-Policy"; Value = "strict-origin-when-cross-origin" },
+        @{ Name = "Permissions-Policy"; Value = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()" }
+    )
+
+    foreach ($header in $headers) {
+        foreach ($existingHeader in @($customHeaders.SelectNodes("add[@name='$($header.Name)']"))) {
+            [void]$customHeaders.RemoveChild($existingHeader)
+        }
+
+        $node = $config.CreateElement("add")
+        $node.SetAttribute("name", $header.Name)
+        $node.SetAttribute("value", $header.Value)
+        [void]$customHeaders.AppendChild($node)
+    }
+
+    $config.Save($WebConfigPath)
+}
+
+function Set-IisResponseHardening {
+    param(
+        [string]$WebConfigPath
+    )
+
+    [xml]$config = Get-Content -Raw -LiteralPath $WebConfigPath
+    $systemWebServer = $config.SelectSingleNode("/configuration/system.webServer")
+    if ($null -eq $systemWebServer) {
+        $systemWebServer = $config.SelectSingleNode("/configuration/location/system.webServer")
+    }
+
+    if ($null -eq $systemWebServer) {
+        $systemWebServer = $config.CreateElement("system.webServer")
+        [void]$config.configuration.AppendChild($systemWebServer)
+    }
+
+    $security = $systemWebServer.SelectSingleNode("security")
+    if ($null -eq $security) {
+        $security = $config.CreateElement("security")
+        [void]$systemWebServer.AppendChild($security)
+    }
+
+    $requestFiltering = $security.SelectSingleNode("requestFiltering")
+    if ($null -eq $requestFiltering) {
+        $requestFiltering = $config.CreateElement("requestFiltering")
+        [void]$security.AppendChild($requestFiltering)
+    }
+
+    $requestFiltering.SetAttribute("removeServerHeader", "true")
+    $config.Save($WebConfigPath)
+}
+
 function Set-ApiEnvironmentVariables {
     param(
         [string]$WebConfigPath,
@@ -224,6 +309,10 @@ function Set-ApiEnvironmentVariables {
         if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) {
             throw "Missing required deployment environment value: $requiredName"
         }
+    }
+
+    if ($null -eq $secrets.PSObject.Properties["AllowedHosts"]) {
+        $secrets | Add-Member -NotePropertyName "AllowedHosts" -NotePropertyValue "itams.app;www.itams.app"
     }
 
     [xml]$config = Get-Content -Raw -LiteralPath $WebConfigPath
@@ -286,13 +375,31 @@ function Test-ReleaseArtifacts {
         }
     }
 
+    [xml]$clientConfig = Get-Content -Raw -LiteralPath (Join-Path $ClientPath "web.config")
+    $securityHeaders = @($clientConfig.SelectNodes("/configuration/system.webServer/httpProtocol/customHeaders/add"))
+    foreach ($requiredHeader in @("Strict-Transport-Security", "Content-Security-Policy-Report-Only", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy")) {
+        if (-not ($securityHeaders | Where-Object { $_.GetAttribute("name") -eq $requiredHeader })) {
+            throw "Published client web.config is missing security header $requiredHeader."
+        }
+    }
+
+    $clientRequestFiltering = $clientConfig.SelectSingleNode("/configuration/system.webServer/security/requestFiltering")
+    if ($null -eq $clientRequestFiltering -or $clientRequestFiltering.GetAttribute("removeServerHeader") -ne "true") {
+        throw "Published client web.config does not suppress the IIS Server header."
+    }
+
     $apiWebConfigPath = Join-Path $ApiPath "web.config"
     [xml]$apiConfig = Get-Content -Raw -LiteralPath $apiWebConfigPath
     $envVars = @($apiConfig.SelectNodes("/configuration/location/system.webServer/aspNetCore/environmentVariables/environmentVariable"))
-    foreach ($requiredName in @("ASPNETCORE_ENVIRONMENT", "MongoDb__ConnectionString", "Jwt__SigningKey", "Cors__AllowedOrigins__0")) {
+    foreach ($requiredName in @("ASPNETCORE_ENVIRONMENT", "MongoDb__ConnectionString", "Jwt__SigningKey", "Cors__AllowedOrigins__0", "AllowedHosts")) {
         if (-not ($envVars | Where-Object { $_.GetAttribute("name") -eq $requiredName -and -not [string]::IsNullOrWhiteSpace($_.GetAttribute("value")) })) {
             throw "Published API web.config is missing environment variable $requiredName."
         }
+    }
+
+    $apiRequestFiltering = $apiConfig.SelectSingleNode("/configuration/location/system.webServer/security/requestFiltering")
+    if ($null -eq $apiRequestFiltering -or $apiRequestFiltering.GetAttribute("removeServerHeader") -ne "true") {
+        throw "Published API web.config does not suppress the IIS Server header."
     }
 }
 
@@ -447,13 +554,17 @@ try {
 
     Add-CanonicalRedirectRules -WebConfigPath (Join-Path $clientPublishPath "web.config")
     Add-ApiRewriteExclusion -WebConfigPath (Join-Path $clientPublishPath "web.config")
+    Add-SecurityHeaders -WebConfigPath (Join-Path $clientPublishPath "web.config")
+    Set-IisResponseHardening -WebConfigPath (Join-Path $clientPublishPath "web.config")
     Set-ApiEnvironmentVariables -WebConfigPath (Join-Path $apiPublishPath "web.config") -SecretsPath $SecretsPath
+    Set-IisResponseHardening -WebConfigPath (Join-Path $apiPublishPath "web.config")
     New-Item -ItemType Directory -Path (Join-Path $apiPublishPath "logs") -Force | Out-Null
 
     Test-ReleaseArtifacts -ClientPath $clientPublishPath -ApiPath $apiPublishPath -ExpectedApiBaseUrl $expectedApiBaseUrl
 
-    icacls $releasePath /grant "IIS_IUSRS:(OI)(CI)RX" /T | Out-Null
-    icacls (Join-Path $apiPublishPath "logs") /grant "IIS_IUSRS:(OI)(CI)M" /T | Out-Null
+    icacls $clientPublishPath /grant "${SiteAppPoolIdentity}:(OI)(CI)RX" /T | Out-Null
+    icacls $apiPublishPath /grant "${ApiAppPoolIdentity}:(OI)(CI)RX" /T | Out-Null
+    icacls (Join-Path $apiPublishPath "logs") /grant "${ApiAppPoolIdentity}:(OI)(CI)M" /T | Out-Null
 
     Import-Module WebAdministration
     $previousSitePath = (Get-Website -Name "ITAMS").PhysicalPath

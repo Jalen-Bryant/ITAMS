@@ -40,10 +40,17 @@ public static class UserEndpoints
     }
 
     private static async Task<IResult> GetAllUsersAsync(
+        int? offset,
+        int? limit,
         UsersService usersService,
         CancellationToken cancellationToken)
     {
-        var users = await usersService.GetAllAsync(cancellationToken);
+        if (!PageRequest.TryCreate(offset, limit, out var pageRequest, out var validationErrors))
+        {
+            return Results.ValidationProblem(validationErrors);
+        }
+
+        var users = await usersService.GetAllAsync(pageRequest, cancellationToken);
         return Results.Ok(users.Select(MapResponse));
     }
 
@@ -180,6 +187,10 @@ public static class UserEndpoints
             NormalizedEmail = UsersService.NormalizeValue(request.Email!),
             PasswordHash = existingUser.PasswordHash,
             PasswordChangedAt = existingUser.PasswordChangedAt,
+            FailedLoginCount = existingUser.FailedLoginCount,
+            FailedLoginWindowStartedAt = existingUser.FailedLoginWindowStartedAt,
+            LastFailedLoginAt = existingUser.LastFailedLoginAt,
+            LockoutEndAt = existingUser.LockoutEndAt,
             Role = request.Role!.Trim(),
             Department = request.Department!.Trim(),
             IsActive = request.IsActive!.Value,

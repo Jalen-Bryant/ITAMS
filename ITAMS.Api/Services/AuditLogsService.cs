@@ -17,9 +17,14 @@ public sealed class AuditLogsService
         _auditLogsCollection = database.GetCollection<AuditLogDocument>(mongoDbSettings.AuditLogsCollectionName);
     }
 
-    public async Task<IReadOnlyList<AuditLogDocument>> GetAllAsync(CancellationToken cancellationToken = default) =>
+    public async Task<IReadOnlyList<AuditLogDocument>> GetAllAsync(
+        PageRequest pageRequest,
+        CancellationToken cancellationToken = default) =>
         await _auditLogsCollection
             .Find(FilterDefinition<AuditLogDocument>.Empty)
+            .SortByDescending(auditLog => auditLog.Timestamp)
+            .Skip(pageRequest.Offset)
+            .Limit(pageRequest.Limit)
             .ToListAsync(cancellationToken);
 
     public async Task<AuditLogDocument?> GetByIdAsync(ObjectId id, CancellationToken cancellationToken = default) =>

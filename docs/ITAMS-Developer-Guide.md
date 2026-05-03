@@ -11,6 +11,9 @@ Production operations and deployment are covered in
 - [Local Configuration](#local-configuration)
 - [Build, Test, And Run](#build-test-and-run)
 - [API Surface](#api-surface)
+  - [Role Policy Summary](#role-policy-summary)
+  - [Authorization Maintenance Checklist](#authorization-maintenance-checklist)
+  - [Authorization Test Gaps](#authorization-test-gaps)
 - [Frontend Notes](#frontend-notes)
 - [Development Workflow](#development-workflow)
 - [Troubleshooting](#troubleshooting)
@@ -139,6 +142,44 @@ routes are relative to the API host.
 
 The API uses JWT bearer authentication. It validates issuer, audience, signing
 key, token lifetime, role claims, and backing session activity.
+
+### Role Policy Summary
+
+| Role | Reports | Assets | Assignments | Users | History |
+| --- | --- | --- | --- | --- | --- |
+| `Admin` | Read | Read/write | Read/write | Read/write | Read |
+| `Manager` | Read | Read/write | Read/write | Read | Read |
+| `Technician` | None | Read/write | Read/write | None | None |
+| `Auditor` | Read | Read | Read | Read | Read |
+| `User` | None | None | None | None | None |
+
+Role policies authorize from the JWT `role` claim. The per-request session
+check confirms that the backing session and user are still active, but it does
+not reload the current role from MongoDB on every request.
+
+### Authorization Maintenance Checklist
+
+When changing roles or permissions, update these together:
+
+- API authorization policies.
+- Frontend role catalogs and role-aware navigation.
+- Razor `[Authorize]` attributes.
+- User-facing and maintainer documentation.
+- API integration tests for allowed and forbidden access.
+
+Before changing Admin user-management behavior, preserve a path for at least
+one active login-capable `Admin` to remain available.
+
+### Authorization Test Gaps
+
+The current test suite covers representative role checks, authentication,
+session refresh, logout, password changes, and read-only history routes. Add
+targeted tests before relying on stricter guarantees for:
+
+- Role downgrade while an old access token is still active.
+- User deactivation through `/users` and the effect on active sessions.
+- Admin self-demotion or self-deactivation.
+- Last active login-capable Admin removal.
 
 ## Frontend Notes
 

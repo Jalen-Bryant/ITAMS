@@ -12,6 +12,7 @@ public sealed class AuthService
     private const string InvalidCredentialsMessage = "The supplied credentials are invalid.";
     private const string InvalidRefreshTokenMessage = "The supplied refresh token is invalid.";
 
+    private readonly AuthLockoutSettings _lockoutSettings;
     private readonly IMongoClient _mongoClient;
     private readonly IMongoCollection<AuditLogDocument> _auditLogsCollection;
     private readonly IMongoCollection<UserSessionDocument> _sessionsCollection;
@@ -20,16 +21,20 @@ public sealed class AuthService
     private readonly TokenService _tokenService;
     private readonly UsersService _usersService;
     private readonly ILogger<AuthService> _logger;
+    private readonly UserDocument _passwordVerificationDummyUser;
+    private readonly string _passwordVerificationDummyHash;
 
     public AuthService(
         IMongoClient mongoClient,
         IOptions<MongoDbSettings> settings,
+        IOptions<SecuritySettings> securitySettings,
         IPasswordHasher<UserDocument> passwordHasher,
         TokenService tokenService,
         UsersService usersService,
         ILogger<AuthService> logger)
     {
         _mongoClient = mongoClient;
+        _lockoutSettings = securitySettings.Value.AuthLockout;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _usersService = usersService;
@@ -40,6 +45,23 @@ public sealed class AuthService
         _auditLogsCollection = database.GetCollection<AuditLogDocument>(mongoDbSettings.AuditLogsCollectionName);
         _sessionsCollection = database.GetCollection<UserSessionDocument>(mongoDbSettings.UserSessionsCollectionName);
         _usersCollection = database.GetCollection<UserDocument>(mongoDbSettings.UsersCollectionName);
+        _passwordVerificationDummyUser = new UserDocument
+        {
+            Id = ObjectId.Empty,
+            Username = "password-verification-dummy",
+            DisplayName = "Password Verification Dummy",
+            Email = "password-verification-dummy@example.invalid",
+            NormalizedUsername = "PASSWORD-VERIFICATION-DUMMY",
+            NormalizedEmail = "PASSWORD-VERIFICATION-DUMMY@EXAMPLE.INVALID",
+            Role = "User",
+            Department = "Security",
+            IsActive = false,
+            CreatedAt = DateTime.UnixEpoch,
+            UpdatedAt = DateTime.UnixEpoch
+        };
+        _passwordVerificationDummyHash = _passwordHasher.HashPassword(
+            _passwordVerificationDummyUser,
+            Guid.NewGuid().ToString("N"));
     }
 
     public async Task<AuthResult> LoginAsync(
@@ -49,29 +71,48 @@ public sealed class AuthService
         string userAgent,
         CancellationToken cancellationToken = default)
     {
+        var now = DateTime.UtcNow;
         var user = await _usersService.GetByIdentifierAsync(identifier, cancellationToken);
-        if (user is null || !user.IsActive || string.IsNullOrWhiteSpace(user.PasswordHash))
+        if (user is not null && IsLockedOut(user, now))
         {
-            _logger.LogWarning("Failed login attempt for identifier '{Identifier}'.", identifier);
+            _logger.LogWarning("Rejected login attempt for locked account '{Identifier}'.", identifier);
             return new AuthResult { Error = InvalidCredentialsMessage };
         }
 
-        var verifyResult = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
+        var canLogin = user is not null &&
+                       user.IsActive &&
+                       !string.IsNullOrWhiteSpace(user.PasswordHash);
+        var passwordUser = user ?? _passwordVerificationDummyUser;
+        var verifyResult = _passwordHasher.VerifyHashedPassword(
+            passwordUser,
+            canLogin ? user!.PasswordHash! : _passwordVerificationDummyHash,
+            password);
         if (verifyResult == PasswordVerificationResult.Failed)
         {
             _logger.LogWarning("Failed login attempt for identifier '{Identifier}'.", identifier);
+            if (canLogin)
+            {
+                await RecordFailedLoginAsync(user!, ip, userAgent, now, cancellationToken);
+            }
+
             return new AuthResult { Error = InvalidCredentialsMessage };
         }
 
-        var now = DateTime.UtcNow;
+        if (!canLogin)
+        {
+            _logger.LogWarning("Failed login attempt for identifier '{Identifier}'.", identifier);
+            return new AuthResult { Error = InvalidCredentialsMessage };
+        }
+
+        var loginUser = user!;
         var sessionId = ObjectId.GenerateNewId();
         var (refreshToken, refreshTokenHash, refreshTokenExpiresAt) = _tokenService.CreateRefreshToken();
-        var (accessToken, accessTokenExpiresAt) = _tokenService.CreateAccessToken(user, sessionId);
+        var (accessToken, accessTokenExpiresAt) = _tokenService.CreateAccessToken(loginUser, sessionId);
 
         var sessionDocument = new UserSessionDocument
         {
             Id = sessionId,
-            UserId = user.Id,
+            UserId = loginUser.Id,
             RefreshTokenHash = refreshTokenHash,
             CreatedAt = now,
             ExpiresAt = refreshTokenExpiresAt,
@@ -88,41 +129,49 @@ public sealed class AuthService
 
         if (verifyResult == PasswordVerificationResult.SuccessRehashNeeded)
         {
-            var newPasswordHash = _passwordHasher.HashPassword(user, password);
+            var newPasswordHash = _passwordHasher.HashPassword(loginUser, password);
             var updatedUser = new UserDocument
             {
-                Id = user.Id,
-                Username = user.Username,
-                DisplayName = user.DisplayName,
-                Email = user.Email,
-                NormalizedUsername = user.NormalizedUsername,
-                NormalizedEmail = user.NormalizedEmail,
+                Id = loginUser.Id,
+                Username = loginUser.Username,
+                DisplayName = loginUser.DisplayName,
+                Email = loginUser.Email,
+                NormalizedUsername = loginUser.NormalizedUsername,
+                NormalizedEmail = loginUser.NormalizedEmail,
                 PasswordHash = newPasswordHash,
-                PasswordChangedAt = user.PasswordChangedAt ?? now,
-                Role = user.Role,
-                Department = user.Department,
-                IsActive = user.IsActive,
-                CreatedAt = user.CreatedAt,
-                UpdatedAt = user.UpdatedAt
+                PasswordChangedAt = loginUser.PasswordChangedAt ?? now,
+                FailedLoginCount = 0,
+                FailedLoginWindowStartedAt = null,
+                LastFailedLoginAt = null,
+                LockoutEndAt = null,
+                Role = loginUser.Role,
+                Department = loginUser.Department,
+                IsActive = loginUser.IsActive,
+                CreatedAt = loginUser.CreatedAt,
+                UpdatedAt = loginUser.UpdatedAt
             };
 
             await _usersCollection.ReplaceOneAsync(
                 session,
-                existingUser => existingUser.Id == user.Id,
+                existingUser => existingUser.Id == loginUser.Id,
                 updatedUser,
                 cancellationToken: cancellationToken);
 
-            user = updatedUser;
+            loginUser = updatedUser;
+        }
+        else
+        {
+            await ResetFailedLoginsAsync(session, loginUser.Id, now, cancellationToken);
         }
 
         await _auditLogsCollection.InsertOneAsync(
             session,
             MutationDocumentFactory.CreateAuditLog(
                 "LOGIN",
-                user.Id,
-                user.Id,
+                loginUser.Id,
+                loginUser.Id,
                 "User",
-                $"User {user.Username} logged in via API.",
+                $"User {loginUser.Username} logged in via API.",
                 ip,
                 userAgent),
             cancellationToken: cancellationToken);
@@ -132,7 +181,7 @@ public sealed class AuthService
         return new AuthResult
         {
             Success = true,
-            User = user,
+            User = loginUser,
             AccessToken = accessToken,
             RefreshToken = refreshToken,
             AccessTokenExpiresAt = accessTokenExpiresAt,
@@ -294,6 +343,10 @@ public sealed class AuthService
             NormalizedEmail = user.NormalizedEmail,
             PasswordHash = _passwordHasher.HashPassword(user, newPassword),
             PasswordChangedAt = now,
+            FailedLoginCount = 0,
+            FailedLoginWindowStartedAt = null,
+            LastFailedLoginAt = null,
+            LockoutEndAt = null,
             Role = user.Role,
             Department = user.Department,
             IsActive = user.IsActive,
@@ -341,4 +394,98 @@ public sealed class AuthService
         await session.CommitTransactionAsync(cancellationToken);
         return new PasswordChangeResult { Success = true };
     }
+
+    private static bool IsLockedOut(UserDocument user, DateTime nowUtc) =>
+        user.LockoutEndAt is not null &&
+        EnsureUtc(user.LockoutEndAt.Value) > nowUtc;
+
+    private async Task RecordFailedLoginAsync(
+        UserDocument user,
+        string ip,
+        string userAgent,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var windowStart = user.FailedLoginWindowStartedAt is null
+            ? nowUtc
+            : EnsureUtc(user.FailedLoginWindowStartedAt.Value);
+        var failedLoginCount = nowUtc - windowStart > TimeSpan.FromMinutes(_lockoutSettings.FailureWindowMinutes)
+            ? 1
+            : user.FailedLoginCount + 1;
+        if (failedLoginCount == 1)
+        {
+            windowStart = nowUtc;
+        }
+
+        DateTime? lockoutEndAt = null;
+        if (failedLoginCount >= _lockoutSettings.MaxFailedAttempts)
+        {
+            var overThresholdAttempts = Math.Min(
+                failedLoginCount - _lockoutSettings.MaxFailedAttempts,
+                10);
+            var lockoutMinutes = Math.Min(
+                _lockoutSettings.MaxLockoutMinutes,
+                _lockoutSettings.BaseLockoutMinutes * Math.Pow(2, overThresholdAttempts));
+            lockoutEndAt = nowUtc.AddMinutes(lockoutMinutes);
+        }
+
+        var update = Builders<UserDocument>.Update
+            .Set(existingUser => existingUser.FailedLoginCount, failedLoginCount)
+            .Set(existingUser => existingUser.FailedLoginWindowStartedAt, windowStart)
+            .Set(existingUser => existingUser.LastFailedLoginAt, nowUtc)
+            .Set(existingUser => existingUser.LockoutEndAt, lockoutEndAt)
+            .Set(existingUser => existingUser.UpdatedAt, nowUtc);
+
+        await _usersCollection.UpdateOneAsync(
+            existingUser => existingUser.Id == user.Id,
+            update,
+            cancellationToken: cancellationToken);
+
+        if (lockoutEndAt is null)
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "Temporarily locked account '{Username}' after {FailedLoginCount} failed login attempts.",
+            user.Username,
+            failedLoginCount);
+
+        await _auditLogsCollection.InsertOneAsync(
+            MutationDocumentFactory.CreateAuditLog(
+                "LOGIN",
+                user.Id,
+                user.Id,
+                "User",
+                $"User {user.Username} was temporarily locked after repeated failed login attempts.",
+                ip,
+                userAgent,
+                "LOCKED_OUT"),
+            cancellationToken: cancellationToken);
+    }
+
+    private Task ResetFailedLoginsAsync(
+        IClientSessionHandle session,
+        ObjectId userId,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var resetUpdate = Builders<UserDocument>.Update
+            .Set(existingUser => existingUser.FailedLoginCount, 0)
+            .Unset("failedLoginWindowStartedAt")
+            .Unset("lastFailedLoginAt")
+            .Unset("lockoutEndAt")
+            .Set(existingUser => existingUser.UpdatedAt, nowUtc);
+
+        return _usersCollection.UpdateOneAsync(
+            session,
+            existingUser => existingUser.Id == userId,
+            resetUpdate,
+            cancellationToken: cancellationToken);
+    }
+
+    private static DateTime EnsureUtc(DateTime value) =>
+        value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
 }

@@ -4,8 +4,22 @@ namespace ITAMS.Api.Validation;
 
 public static partial class RequestValidation
 {
-    public const int PasswordMinLength = 8;
+    public const int PasswordMinLength = 12;
     public const int PasswordMaxLength = 128;
+
+    private static readonly string[] CommonPasswords =
+    [
+        "123456789012",
+        "admin123456",
+        "changeme123!",
+        "letmein123!",
+        "password",
+        "password1",
+        "password123",
+        "password123!",
+        "qwerty12345",
+        "welcome123"
+    ];
 
     public static readonly string[] AssetTypes =
     [
@@ -233,6 +247,43 @@ public static partial class RequestValidation
         string? value)
     {
         AddRequiredStringLengthError(errors, key, value, PasswordMinLength, PasswordMaxLength);
+        if (errors.ContainsKey(key) || string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        var trimmedValue = value.Trim();
+        if (CommonPasswords.Contains(trimmedValue, StringComparer.OrdinalIgnoreCase))
+        {
+            errors[key] = [$"{key} is too common. Choose a less predictable password."];
+            return;
+        }
+
+        var categories = 0;
+        if (trimmedValue.Any(char.IsLower))
+        {
+            categories++;
+        }
+
+        if (trimmedValue.Any(char.IsUpper))
+        {
+            categories++;
+        }
+
+        if (trimmedValue.Any(char.IsDigit))
+        {
+            categories++;
+        }
+
+        if (trimmedValue.Any(character => !char.IsLetterOrDigit(character)))
+        {
+            categories++;
+        }
+
+        if (categories < 3)
+        {
+            errors[key] = [$"{key} must include at least three of uppercase letters, lowercase letters, numbers, and symbols."];
+        }
     }
 
     [GeneratedRegex(@"^\S+@\S+\.\S+$", RegexOptions.CultureInvariant)]

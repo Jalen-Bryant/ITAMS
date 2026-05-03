@@ -75,6 +75,16 @@ ITAMS currently recognizes these role names:
 Use the least privileged role that supports the user's job. Reserve `Admin`
 accounts for staff who need user management or full operational control.
 
+Permission enforcement notes:
+
+- The client hides navigation links and write controls that the current role
+  cannot use, but server-side API policies are the enforcement point.
+- Role changes are reflected in new access tokens immediately. Existing access
+  tokens can still carry the previous role until they expire; the default
+  access-token lifetime is 60 minutes.
+- Before demoting, deactivating, or deleting an `Admin`, confirm that another
+  active login-capable `Admin` account exists.
+
 ## Authentication And Sessions
 
 - Users sign in at `https://itams.app/login`.
